@@ -28,7 +28,7 @@ const app: Application = express();
 // Middleware
 app.use(helmet()); // Security headers
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:8081',
+  origin: true, // Allow all origins in development for mobile app testing
   credentials: true,
 }));
 app.use(compression()); // Compress responses

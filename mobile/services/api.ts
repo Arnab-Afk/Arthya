@@ -1,5 +1,6 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import {
   ApiResponse,
   LoginRequest,
@@ -19,9 +20,24 @@ import {
 // Change this to your computer's IP address when testing on physical device
 // On iOS simulator, localhost works fine
 // On Android emulator, use 10.0.2.2 instead of localhost
-const API_URL = __DEV__
-  ? 'http://localhost:3000/api'
-  : 'https://your-production-api.com/api';
+
+const getApiUrl = () => {
+  if (!__DEV__) {
+    return 'https://your-production-api.com/api';
+  }
+  
+  // For Android emulator, use 10.0.2.2
+  // For physical device, use your computer's local IP
+  // For iOS simulator, localhost works
+  if (Platform.OS === 'android') {
+    // Use your local IP for physical device, or 10.0.2.2 for emulator
+    return 'http://192.168.44.122:3000/api';
+  }
+  
+  return 'http://localhost:3000/api';
+};
+
+const API_URL = getApiUrl();
 
 class ApiService {
   private client: AxiosInstance;
