@@ -200,6 +200,135 @@ class ApiService {
     return this.client.get('/coaching/insights', { params: { period } });
   }
 
+  async getAIInsights(): Promise<ApiResponse<any>> {
+    return this.client.get('/coaching/ai-insights');
+  }
+
+  async getFinancialProfile(): Promise<ApiResponse<any>> {
+    return this.client.get('/coaching/profile');
+  }
+
+  async getWeeklySummary(): Promise<ApiResponse<any>> {
+    return this.client.get('/coaching/weekly-summary');
+  }
+
+  async getActionPlan(): Promise<ApiResponse<any>> {
+    return this.client.get('/coaching/action-plan');
+  }
+
+  async chatWithCoach(message: string, history?: { role: 'user' | 'model'; content: string }[]): Promise<ApiResponse<any>> {
+    return this.client.post('/coaching/chat', { message, history });
+  }
+
+  // Gemini AI-powered endpoints
+  async getGeminiAdvice(): Promise<ApiResponse<any>> {
+    return this.client.get('/coaching/gemini-advice');
+  }
+
+  async getGeminiWeeklySummary(): Promise<ApiResponse<any>> {
+    return this.client.get('/coaching/gemini-weekly');
+  }
+
+  async getSpendingAnalysis(days: number = 30): Promise<ApiResponse<any>> {
+    return this.client.get('/coaching/spending-analysis', { params: { days } });
+  }
+
+  async getGoalAdvice(goalId: string): Promise<ApiResponse<any>> {
+    return this.client.get(`/coaching/goal-advice/${goalId}`);
+  }
+
+  // Budget Methods
+  async getBudgets(isActive?: boolean): Promise<ApiResponse<any[]>> {
+    return this.client.get('/budgets', { params: { isActive } });
+  }
+
+  async getBudget(id: string): Promise<ApiResponse<any>> {
+    return this.client.get(`/budgets/${id}`);
+  }
+
+  async createBudget(data: {
+    category: string;
+    amount: number;
+    period?: 'weekly' | 'monthly' | 'yearly';
+    startDate?: string;
+    alertThreshold?: number;
+    notes?: string;
+  }): Promise<ApiResponse<any>> {
+    return this.client.post('/budgets', data);
+  }
+
+  async updateBudget(id: string, data: Partial<any>): Promise<ApiResponse<any>> {
+    return this.client.put(`/budgets/${id}`, data);
+  }
+
+  async deleteBudget(id: string): Promise<ApiResponse<void>> {
+    return this.client.delete(`/budgets/${id}`);
+  }
+
+  async getBudgetSummary(): Promise<ApiResponse<any>> {
+    return this.client.get('/budgets/summary');
+  }
+
+  // Achievement Methods
+  async getAchievements(): Promise<ApiResponse<any>> {
+    return this.client.get('/achievements');
+  }
+
+  async checkAchievements(): Promise<ApiResponse<any>> {
+    return this.client.post('/achievements/check');
+  }
+
+  async getAchievementProgress(): Promise<ApiResponse<any>> {
+    return this.client.get('/achievements/progress');
+  }
+
+  // Prediction Methods
+  async getIncomePrediction(months?: number): Promise<ApiResponse<any>> {
+    return this.client.get('/predictions/income', { params: { months } });
+  }
+
+  async getExpensePrediction(months?: number): Promise<ApiResponse<any>> {
+    return this.client.get('/predictions/expenses', { params: { months } });
+  }
+
+  async getCashFlowProjection(months?: number): Promise<ApiResponse<any>> {
+    return this.client.get('/predictions/cashflow', { params: { months } });
+  }
+
+  async getNudges(): Promise<ApiResponse<any[]>> {
+    return this.client.get('/predictions/nudges');
+  }
+
+  async getFinancialHealthScore(): Promise<ApiResponse<any>> {
+    return this.client.get('/predictions/health-score');
+  }
+
+  // SMS Import Methods
+  async bulkImportTransactions(transactions: {
+    type: 'income' | 'expense';
+    amount: number;
+    description: string;
+    category?: string;
+    date: string;
+    source?: string;
+    notes?: string;
+  }[]): Promise<ApiResponse<{
+    imported: number;
+    skipped: number;
+    errors: string[];
+    message: string;
+  }>> {
+    return this.client.post('/transactions/bulk-import', { transactions });
+  }
+
+  async getSpendingByCategory(startDate?: string, endDate?: string): Promise<ApiResponse<any>> {
+    return this.client.get('/transactions/by-category', { params: { startDate, endDate } });
+  }
+
+  async getMonthlyTrends(months?: number): Promise<ApiResponse<any>> {
+    return this.client.get('/transactions/monthly-trends', { params: { months } });
+  }
+
   // Health Check
   async healthCheck(): Promise<any> {
     return axios.get(`${API_URL.replace('/api', '')}/health`);

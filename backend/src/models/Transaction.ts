@@ -7,6 +7,7 @@ import User from './User';
   indexes: [
     { fields: ['userId', 'date'] },
     { fields: ['userId', 'type'] },
+    { fields: ['userId', 'category'] },
   ],
 })
 export default class Transaction extends Model {
@@ -66,6 +67,19 @@ export default class Transaction extends Model {
   status!: 'completed' | 'pending' | 'failed';
 
   @Column({
+    type: DataType.STRING,
+    allowNull: true,
+    defaultValue: 'manual',
+  })
+  source?: 'manual' | 'sms_import' | 'bank_sync' | 'upi';
+
+  @Column({
+    type: DataType.TEXT,
+    allowNull: true,
+  })
+  notes?: string;
+
+  @Column({
     type: DataType.JSONB,
     allowNull: true,
   })
@@ -73,5 +87,7 @@ export default class Transaction extends Model {
     location?: string;
     paymentMethod?: string;
     merchantName?: string;
+    bankName?: string;
+    smsBody?: string;
   };
 }

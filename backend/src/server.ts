@@ -18,6 +18,9 @@ import transactionRoutes from './routes/transactionRoutes';
 import goalRoutes from './routes/goalRoutes';
 import analyticsRoutes from './routes/analyticsRoutes';
 import coachingRoutes from './routes/coachingRoutes';
+import budgetRoutes from './routes/budgetRoutes';
+import achievementRoutes from './routes/achievementRoutes';
+import predictionRoutes from './routes/predictionRoutes';
 
 // Connect to database
 connectDB();
@@ -55,6 +58,9 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/coaching', coachingRoutes);
+app.use('/api/budgets', budgetRoutes);
+app.use('/api/achievements', achievementRoutes);
+app.use('/api/predictions', predictionRoutes);
 
 // 404 handler
 app.use((_req: Request, res: Response) => {

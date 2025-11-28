@@ -220,7 +220,35 @@ export default function HomeScreen() {
           </ScrollView>
         </Animated.View>
 
-        {/* Quick Transfer */}
+        {/* Quick Actions */}
+        <Animated.View entering={FadeInDown.delay(550).duration(500)} style={styles.quickActionsSection}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <View style={styles.quickActionsRow}>
+            <TouchableOpacity 
+              style={styles.quickActionButton} 
+              onPress={() => router.push('/sms-import')}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: '#9FE8AE22' }]}>
+                <Ionicons name="mail" size={24} color="#9FE8AE" />
+              </View>
+              <Text style={styles.quickActionText}>Import SMS</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.quickActionButton}>
+              <View style={[styles.quickActionIcon, { backgroundColor: '#64D2FF22' }]}>
+                <Ionicons name="add-circle" size={24} color="#64D2FF" />
+              </View>
+              <Text style={styles.quickActionText}>Add Transaction</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.quickActionButton}>
+              <View style={[styles.quickActionIcon, { backgroundColor: '#D4B48322' }]}>
+                <Ionicons name="flag" size={24} color="#D4B483" />
+              </View>
+              <Text style={styles.quickActionText}>New Goal</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+
+        {/* Recent Transactions */}
         <Animated.View entering={FadeInDown.delay(600).duration(500)} style={styles.transferSection}>
           <Text style={styles.sectionTitle}>Recent Transactions</Text>
           {dashboard?.recentTransactions && dashboard.recentTransactions.length > 0 ? (
@@ -559,5 +587,30 @@ const styles = StyleSheet.create({
   transactionAmount: {
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  quickActionsSection: {
+    paddingHorizontal: 24,
+    marginBottom: 24,
+  },
+  quickActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  quickActionButton: {
+    alignItems: 'center',
+    width: '30%',
+  },
+  quickActionIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  quickActionText: {
+    color: Colors.textDim,
+    fontSize: 12,
+    textAlign: 'center',
   },
 });

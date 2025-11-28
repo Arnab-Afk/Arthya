@@ -3,6 +3,7 @@ import { Op } from 'sequelize';
 import Transaction from '../models/Transaction';
 import { AuthRequest } from '../middleware/auth';
 import sequelize from '../config/database';
+import { categorizeTransaction } from '../services/categorization';
 
 // @desc    Get all transactions for user
 // @route   GET /api/transactions
@@ -248,6 +249,203 @@ export const getTransactionSummary = async (
         ...formattedSummary,
         savings: Number((formattedSummary.income - formattedSummary.expense).toFixed(2)),
       },
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Bulk import transactions (from SMS)
+// @route   POST /api/transactions/bulk-import
+// @access  Private
+export const bulkImportTransactions = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { transactions } = req.body;
+
+    if (!Array.isArray(transactions) || transactions.length === 0) {
+      res.status(400).json({
+        success: false,
+        message: 'Transactions array is required',
+      });
+      return;
+    }
+
+    const userId = req.user?.id;
+    const results = {
+      imported: 0,
+      skipped: 0,
+      errors: [] as string[],
+    };
+
+    for (const txn of transactions) {
+      try {
+        // Check for duplicates based on amount, date, and description
+        const existingTxn = await Transaction.findOne({
+          where: {
+            userId,
+            amount: txn.amount,
+            description: txn.description,
+            date: {
+              [Op.between]: [
+                new Date(new Date(txn.date).getTime() - 60000), // 1 minute before
+                new Date(new Date(txn.date).getTime() + 60000), // 1 minute after
+              ],
+            },
+          },
+        });
+
+        if (existingTxn) {
+          results.skipped++;
+          continue;
+        }
+
+        // Auto-categorize if no category provided
+        let category = txn.category;
+        if (!category && txn.description) {
+          const categorized = categorizeTransaction(txn.description, txn.amount);
+          category = categorized.category;
+        }
+
+        await Transaction.create({
+          userId,
+          type: txn.type || 'expense',
+          amount: txn.amount,
+          description: txn.description,
+          category: category || 'Other',
+          date: new Date(txn.date),
+          source: txn.source || 'sms_import',
+          notes: txn.notes,
+        });
+
+        results.imported++;
+      } catch (err: any) {
+        results.errors.push(`Failed to import: ${txn.description} - ${err.message}`);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        ...results,
+        message: `Successfully imported ${results.imported} transactions, skipped ${results.skipped} duplicates`,
+      },
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Get spending by category
+// @route   GET /api/transactions/by-category
+// @access  Private
+export const getSpendingByCategory = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { startDate, endDate } = req.query;
+    const where: any = { 
+      userId: req.user?.id,
+      type: 'expense',
+    };
+
+    if (startDate || endDate) {
+      where.date = {};
+      if (startDate) where.date[Op.gte] = new Date(startDate as string);
+      if (endDate) where.date[Op.lte] = new Date(endDate as string);
+    }
+
+    const categorySpending = await Transaction.findAll({
+      where,
+      attributes: [
+        'category',
+        [sequelize.fn('SUM', sequelize.col('amount')), 'total'],
+        [sequelize.fn('COUNT', sequelize.col('id')), 'count'],
+      ],
+      group: ['category'],
+      order: [[sequelize.literal('total'), 'DESC']],
+      raw: true,
+    });
+
+    const total = categorySpending.reduce((sum: number, item: any) => sum + parseFloat(item.total), 0);
+
+    const formattedData = categorySpending.map((item: any) => ({
+      category: item.category || 'Uncategorized',
+      total: parseFloat(item.total),
+      count: parseInt(item.count),
+      percentage: total > 0 ? ((parseFloat(item.total) / total) * 100).toFixed(1) : 0,
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        categories: formattedData,
+        totalSpending: total,
+      },
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Get monthly trends
+// @route   GET /api/transactions/monthly-trends
+// @access  Private
+export const getMonthlyTrends = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const months = parseInt(req.query.months as string) || 6;
+    const startDate = new Date();
+    startDate.setMonth(startDate.getMonth() - months);
+
+    const transactions = await Transaction.findAll({
+      where: {
+        userId: req.user?.id,
+        date: { [Op.gte]: startDate },
+      },
+      order: [['date', 'ASC']],
+    });
+
+    // Group by month
+    const monthlyData: { [key: string]: { income: number; expense: number } } = {};
+    
+    transactions.forEach((txn) => {
+      const monthKey = `${txn.date.getFullYear()}-${String(txn.date.getMonth() + 1).padStart(2, '0')}`;
+      if (!monthlyData[monthKey]) {
+        monthlyData[monthKey] = { income: 0, expense: 0 };
+      }
+      if (txn.type === 'income') {
+        monthlyData[monthKey].income += Number(txn.amount);
+      } else if (txn.type === 'expense') {
+        monthlyData[monthKey].expense += Number(txn.amount);
+      }
+    });
+
+    const trends = Object.entries(monthlyData).map(([month, data]) => ({
+      month,
+      income: Math.round(data.income),
+      expense: Math.round(data.expense),
+      savings: Math.round(data.income - data.expense),
+      savingsRate: data.income > 0 ? Math.round(((data.income - data.expense) / data.income) * 100) : 0,
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: trends,
     });
   } catch (error: any) {
     res.status(400).json({

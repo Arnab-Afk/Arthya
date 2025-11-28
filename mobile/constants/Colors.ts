@@ -21,4 +21,8 @@ export const Colors = {
     border: '#38383A',
     borderLight: '#48484A',
     shadow: 'rgba(0, 0, 0, 0.3)',
+    // Transaction colors
+    income: '#34C759',  // Green for income
+    expense: '#FF453A', // Red for expenses
+    transfer: '#64D2FF', // Blue for transfers
 };
