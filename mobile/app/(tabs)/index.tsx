@@ -1,18 +1,73 @@
-import React from 'react';
-import { StyleSheet, View, Text, ScrollView, Image, TouchableOpacity, Dimensions, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, View, Text, ScrollView, Image, TouchableOpacity, Dimensions, Platform, RefreshControl, ActivityIndicator } from 'react-native';
 import { Colors } from '@/constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SummaryCard } from '@/components/SummaryCard';
 import { GoalCard } from '@/components/GoalCard';
 import Animated, { FadeInDown, FadeInRight, ZoomIn } from 'react-native-reanimated';
+import { useAuth } from '@/contexts/AuthContext';
+import api from '@/services/api';
+import { DashboardData } from '@/types/api';
+import { useRouter } from 'expo-router';
 
 const { width } = Dimensions.get('window');
 
 export default function HomeScreen() {
+  const { user, logout } = useAuth();
+  const router = useRouter();
+  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    loadDashboard();
+  }, []);
+
+  const loadDashboard = async () => {
+    try {
+      const response = await api.getDashboard();
+      if (response.success && response.data) {
+        setDashboard(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to load dashboard:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadDashboard();
+    setRefreshing(false);
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    router.replace('/login');
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+        <Text style={styles.loadingText}>Loading your dashboard...</Text>
+      </View>
+    );
+  }
+
+  const formatCurrency = (amount: number) => {
+    return `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  const getInitials = (name?: string) => {
+    if (!name) return 'U';
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+  };
+
   return (
     <View style={styles.container}>
-      {/* Header */}
       {/* Header */}
       <Animated.View entering={FadeInDown.delay(100).duration(500)} style={styles.header}>
         <TouchableOpacity>
@@ -26,14 +81,18 @@ export default function HomeScreen() {
             <Ionicons name="notifications-outline" size={24} color={Colors.text} />
             <View style={styles.badge} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.profileButton}>
-            <Text style={styles.profileText}>N</Text>
+          <TouchableOpacity style={styles.profileButton} onPress={handleLogout}>
+            <Text style={styles.profileText}>{getInitials(user?.name)}</Text>
           </TouchableOpacity>
         </View>
       </Animated.View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Cards Section */}
+      <ScrollView 
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
+        }
+      >
         {/* Cards Section */}
         <Animated.ScrollView
           horizontal
@@ -41,68 +100,96 @@ export default function HomeScreen() {
           style={styles.cardsScroll}
           entering={FadeInRight.delay(200).duration(500)}
         >
-          <LinearGradient
-            colors={['#333', '#111']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.card}
-          >
-            <View style={styles.cardHeader}>
-              <Ionicons name="logo-paypal" size={24} color="#fff" />
-              <Ionicons name="wifi" size={24} color="#666" />
-            </View>
-            <Text style={styles.cardNumber}>6277  2154  6598  3247</Text>
-            <View style={styles.cardFooter}>
-              <Text style={styles.cardLabel}>Expir 05/22</Text>
-            </View>
-          </LinearGradient>
-
-          <LinearGradient
-            colors={['#222', '#000']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[styles.card, { marginLeft: 15, opacity: 0.6 }]}
-          >
-            <View style={styles.cardHeader}>
-              <Text style={styles.payeerText}>PAYEER</Text>
-            </View>
-            <Text style={styles.cardNumber}>6591 4784 2033</Text>
-          </LinearGradient>
+          {dashboard?.cards && dashboard.cards.length > 0 ? (
+            dashboard.cards.map((card, index) => (
+              <LinearGradient
+                key={card._id}
+                colors={index === 0 ? ['#333', '#111'] : ['#222', '#000']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.card, index > 0 && { marginLeft: 15, opacity: 0.6 }]}
+              >
+                <View style={styles.cardHeader}>
+                  <Ionicons 
+                    name={card.cardType === 'paypal' ? 'logo-paypal' : 'card'} 
+                    size={24} 
+                    color="#fff" 
+                  />
+                  <Ionicons name="wifi" size={24} color="#666" />
+                </View>
+                <Text style={styles.cardNumber}>{card.cardNumber}</Text>
+                <View style={styles.cardFooter}>
+                  <Text style={styles.cardLabel}>Balance: {formatCurrency(card.balance)}</Text>
+                </View>
+              </LinearGradient>
+            ))
+          ) : (
+            <LinearGradient
+              colors={['#333', '#111']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.card}
+            >
+              <View style={styles.cardHeader}>
+                <Ionicons name="card" size={24} color="#fff" />
+                <Ionicons name="wifi" size={24} color="#666" />
+              </View>
+              <Text style={styles.cardNumber}>No cards added</Text>
+              <View style={styles.cardFooter}>
+                <Text style={styles.cardLabel}>Add a card to get started</Text>
+              </View>
+            </LinearGradient>
+          )}
         </Animated.ScrollView>
 
         {/* Summary Cards */}
-        {/* Summary Cards */}
         <Animated.View entering={FadeInDown.delay(300).duration(500)} style={styles.summarySection}>
-          <SummaryCard title="Income" amount="$5,200" icon="arrow-down" color="#9FE8AE" trend="+12%" />
-          <SummaryCard title="Expense" amount="$1,450" icon="arrow-up" color="#FF453A" trend="-5%" />
-          <SummaryCard title="Savings" amount="$3,750" icon="wallet" color="#D4B483" trend="+8%" />
+          <SummaryCard 
+            title="Income" 
+            amount={formatCurrency(dashboard?.summary.income || 0)} 
+            icon="arrow-down" 
+            color="#9FE8AE" 
+            trend="+12%" 
+          />
+          <SummaryCard 
+            title="Expense" 
+            amount={formatCurrency(dashboard?.summary.expense || 0)} 
+            icon="arrow-up" 
+            color="#FF453A" 
+            trend="-5%" 
+          />
+          <SummaryCard 
+            title="Savings" 
+            amount={formatCurrency(dashboard?.summary.savings || 0)} 
+            icon="wallet" 
+            color="#D4B483" 
+            trend="+8%" 
+          />
         </Animated.View>
 
         {/* Available Amount */}
-        {/* Available Amount */}
         <Animated.View entering={FadeInDown.delay(400).duration(500)} style={styles.balanceSection}>
           <Text style={styles.balanceLabel}>Available Amount</Text>
-          <Text style={styles.balanceValue}>$24,178.25</Text>
+          <Text style={styles.balanceValue}>{formatCurrency(dashboard?.summary.availableBalance || 0)}</Text>
 
           <View style={styles.balanceRow}>
             <View style={styles.balanceItem}>
               <View style={[styles.indicator, { borderColor: Colors.primary }]} />
               <View>
                 <Text style={styles.itemLabel}>Card balance</Text>
-                <Text style={styles.itemValue}>$24,178.25</Text>
+                <Text style={styles.itemValue}>{formatCurrency(dashboard?.summary.availableBalance || 0)}</Text>
               </View>
             </View>
             <View style={styles.balanceItem}>
               <View style={[styles.indicator, { borderColor: Colors.accent }]} />
               <View>
                 <Text style={styles.itemLabel}>Credit limit</Text>
-                <Text style={styles.itemValue}>$50,000</Text>
+                <Text style={styles.itemValue}>{formatCurrency(dashboard?.summary.creditLimit || 0)}</Text>
               </View>
             </View>
           </View>
         </Animated.View>
 
-        {/* Goals & Milestones */}
         {/* Goals & Milestones */}
         <Animated.View entering={FadeInDown.delay(500).duration(500)} style={styles.goalsSection}>
           <View style={styles.sectionHeader}>
@@ -112,48 +199,68 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.goalsScroll}>
-            <GoalCard
-              title="New Car"
-              currentAmount="$15,000"
-              targetAmount="$25,000"
-              progress={0.6}
-              icon="car-sport"
-            />
-            <GoalCard
-              title="Holiday"
-              currentAmount="$2,500"
-              targetAmount="$5,000"
-              progress={0.5}
-              icon="airplane"
-            />
-            <GoalCard
-              title="MacBook"
-              currentAmount="$1,200"
-              targetAmount="$2,000"
-              progress={0.6}
-              icon="laptop-outline"
-            />
+            {dashboard?.activeGoals && dashboard.activeGoals.length > 0 ? (
+              dashboard.activeGoals.slice(0, 3).map((goal) => (
+                <GoalCard
+                  key={goal._id}
+                  title={goal.title}
+                  currentAmount={formatCurrency(goal.currentAmount)}
+                  targetAmount={formatCurrency(goal.targetAmount)}
+                  progress={goal.currentAmount / goal.targetAmount}
+                  icon={goal.icon || 'star'}
+                />
+              ))
+            ) : (
+              <View style={styles.emptyGoals}>
+                <Ionicons name="flag-outline" size={48} color={Colors.textDim} />
+                <Text style={styles.emptyText}>No active goals</Text>
+                <Text style={styles.emptySubtext}>Create your first financial goal</Text>
+              </View>
+            )}
           </ScrollView>
         </Animated.View>
 
         {/* Quick Transfer */}
-        {/* Quick Transfer */}
         <Animated.View entering={FadeInDown.delay(600).duration(500)} style={styles.transferSection}>
-          <Text style={styles.sectionTitle}>Quick Transfer</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.transferScroll}>
-            {[
-              { name: 'Alex', id: '3281', img: 'https://i.pravatar.cc/100?img=11' },
-              { name: 'Hanna', id: '5714', img: 'https://i.pravatar.cc/100?img=5' },
-              { name: 'Emma', id: '2357', img: 'https://i.pravatar.cc/100?img=9' },
-              { name: 'John', id: '5785', img: 'https://i.pravatar.cc/100?img=13' },
-            ].map((user, index) => (
-              <View key={index} style={styles.userCard}>
-                <Image source={{ uri: user.img }} style={styles.userImage} />
-                <Text style={styles.userName}>{user.name}</Text>
-                <Text style={styles.userId}>**** {user.id}</Text>
-              </View>
-            ))}
-          </ScrollView>
+          <Text style={styles.sectionTitle}>Recent Transactions</Text>
+          {dashboard?.recentTransactions && dashboard.recentTransactions.length > 0 ? (
+            <View style={styles.transactionsList}>
+              {dashboard.recentTransactions.slice(0, 5).map((transaction) => (
+                <View key={transaction._id} style={styles.transactionItem}>
+                  <View style={styles.transactionLeft}>
+                    <View style={[
+                      styles.transactionIcon,
+                      { backgroundColor: transaction.type === 'income' ? '#9FE8AE22' : '#FF453A22' }
+                    ]}>
+                      <Ionicons 
+                        name={transaction.type === 'income' ? 'arrow-down' : 'arrow-up'} 
+                        size={20} 
+                        color={transaction.type === 'income' ? '#9FE8AE' : '#FF453A'} 
+                      />
+                    </View>
+                    <View>
+                      <Text style={styles.transactionCategory}>{transaction.category}</Text>
+                      <Text style={styles.transactionDate}>
+                        {new Date(transaction.date).toLocaleDateString()}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={[
+                    styles.transactionAmount,
+                    { color: transaction.type === 'income' ? '#9FE8AE' : '#FF453A' }
+                  ]}>
+                    {transaction.type === 'income' ? '+' : '-'}{formatCurrency(transaction.amount)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.emptyTransactions}>
+              <Ionicons name="receipt-outline" size={48} color={Colors.textDim} />
+              <Text style={styles.emptyText}>No transactions yet</Text>
+              <Text style={styles.emptySubtext}>Start tracking your finances</Text>
+            </View>
+          )}
         </Animated.View>
       </ScrollView>
     </View>
@@ -165,6 +272,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
     paddingTop: 60,
+  },
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: Colors.textDim,
+    marginTop: 16,
+    fontSize: 14,
   },
   header: {
     flexDirection: 'row',
@@ -307,6 +423,7 @@ const styles = StyleSheet.create({
   },
   transferSection: {
     paddingHorizontal: 24,
+    marginBottom: 32,
   },
   sectionTitle: {
     color: Colors.text,
@@ -373,5 +490,74 @@ const styles = StyleSheet.create({
   },
   goalsScroll: {
     paddingLeft: 24,
+  },
+  emptyGoals: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+    marginHorizontal: 24,
+    backgroundColor: Colors.card,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  emptyTransactions: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+    backgroundColor: Colors.card,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  emptyText: {
+    color: Colors.text,
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 16,
+  },
+  emptySubtext: {
+    color: Colors.textDim,
+    fontSize: 14,
+    marginTop: 4,
+  },
+  transactionsList: {
+    gap: 12,
+  },
+  transactionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: Colors.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  transactionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  transactionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  transactionCategory: {
+    color: Colors.text,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  transactionDate: {
+    color: Colors.textDim,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  transactionAmount: {
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
