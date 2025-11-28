@@ -1,10 +1,15 @@
-import express, { Application, Request, Response } from 'express';
+import 'reflect-metadata';
 import dotenv from 'dotenv';
+
+// Load environment variables FIRST before any other imports
+dotenv.config();
+
+import express, { Application, Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import compression from 'compression';
-import connectDB from './config/database';
+import { connectDB } from './config/database';
 import { errorHandler } from './middleware/error';
 
 // Import routes
@@ -13,9 +18,6 @@ import transactionRoutes from './routes/transactionRoutes';
 import goalRoutes from './routes/goalRoutes';
 import analyticsRoutes from './routes/analyticsRoutes';
 import coachingRoutes from './routes/coachingRoutes';
-
-// Load environment variables
-dotenv.config();
 
 // Connect to database
 connectDB();
