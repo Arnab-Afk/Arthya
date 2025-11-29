@@ -284,7 +284,15 @@ export default function HomeScreen() {
         </Animated.View>
       </ScrollView>
 
-      {/* Floating Action Button */}
+      {/* Floating Action Buttons */}
+      <TouchableOpacity
+        style={styles.fabChat}
+        onPress={() => router.push('/chat')}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="chatbubble-ellipses" size={24} color="#000" />
+      </TouchableOpacity>
+
       <TouchableOpacity
         style={styles.fab}
         onPress={() => router.push('/add-transaction')}
@@ -564,10 +572,26 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
   },
+  fabChat: {
+    position: 'absolute',
+    bottom: 170,
+    right: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 5,
+  },
   fab: {
     position: 'absolute',
     bottom: 100,
-    right: 24,
+    right: 20,
     width: 48,
     height: 48,
     borderRadius: 24,

@@ -52,8 +52,9 @@ export default function ChartsScreen() {
     const [spending, setSpending] = useState(0);
     const [income, setIncome] = useState(0);
     const [data, setData] = useState<CategoryData[]>([]);
+    const [isInitialLoad, setIsInitialLoad] = useState(true);
 
-    // Refresh data when screen comes into focus
+    // Refresh data when screen comes into focus OR when period changes
     useFocusEffect(
         useCallback(() => {
             loadData();
@@ -62,35 +63,61 @@ export default function ChartsScreen() {
 
     const loadData = async () => {
         try {
-            // Get days based on period
+            // Only show loading spinner on initial load
+            if (isInitialLoad) {
+                setLoading(true);
+            }
+            
+            // Get days based on period - fetch real data for each period
             const days = selectedPeriod === 'weekly' ? 7 : selectedPeriod === 'monthly' ? 30 : 365;
+            
             const response = await api.getSpendingAnalysis(days);
             
             if (response.success && response.data) {
                 const analyticsData = response.data;
-                setSpending(analyticsData.totalSpending || 0);
-                setIncome(analyticsData.totalIncome || 0);
+                const totalSpending = analyticsData.totalSpending || analyticsData.totalExpense || 0;
+                const totalIncome = analyticsData.totalIncome || 0;
+                
+                setSpending(totalSpending);
+                setIncome(totalIncome);
                 
                 // Transform category breakdown into chart data
                 const categories = analyticsData.categories || analyticsData.categoryBreakdown || [];
-                const categoryData: CategoryData[] = categories.map((cat: CategorySpending, index: number) => ({
-                    name: cat.category.charAt(0).toUpperCase() + cat.category.slice(1).replace('_', ' '),
-                    amount: typeof cat.total === 'string' ? parseFloat(cat.total) : cat.total || 0,
-                    percentage: typeof cat.percentage === 'string' ? parseFloat(cat.percentage) : cat.percentage || 0,
-                    color: categoryColors[index % categoryColors.length],
-                    icon: getCategoryIcon(cat.category),
-                    trend: 0,
-                }));
                 
-                setData(categoryData.length > 0 ? categoryData : getEmptyData());
+                if (categories.length > 0) {
+                    const categoryData: CategoryData[] = categories.map((cat: CategorySpending, index: number) => {
+                        const amount = typeof cat.total === 'string' ? parseFloat(cat.total) : cat.total || 0;
+                        const percentage = typeof cat.percentage === 'string' ? parseFloat(cat.percentage) : cat.percentage || 0;
+                        
+                        return {
+                            name: cat.category.charAt(0).toUpperCase() + cat.category.slice(1).replace('_', ' '),
+                            amount,
+                            percentage,
+                            color: categoryColors[index % categoryColors.length],
+                            icon: getCategoryIcon(cat.category),
+                            trend: 0,
+                        };
+                    });
+                    
+                    setData(categoryData);
+                } else {
+                    setData(getEmptyData());
+                }
             } else {
                 setData(getEmptyData());
+                setSpending(0);
+                setIncome(0);
             }
         } catch (error) {
             console.error('Failed to load chart data:', error);
             setData(getEmptyData());
+            setSpending(0);
+            setIncome(0);
         } finally {
-            setLoading(false);
+            if (isInitialLoad) {
+                setLoading(false);
+                setIsInitialLoad(false);
+            }
         }
     };
 
@@ -357,7 +384,15 @@ export default function ChartsScreen() {
                 )}
             </ScrollView>
 
-            {/* Floating Action Button */}
+            {/* Floating Action Buttons */}
+            <TouchableOpacity
+                style={styles.fabChat}
+                onPress={() => router.push('/chat')}
+                activeOpacity={0.8}
+            >
+                <Ionicons name="chatbubble-ellipses" size={24} color="#000" />
+            </TouchableOpacity>
+
             <TouchableOpacity
                 style={styles.fab}
                 onPress={() => router.push('/add-transaction')}
@@ -646,20 +681,36 @@ const styles = StyleSheet.create({
         height: '100%',
         borderRadius: 3,
     },
-    fab: {
+    fabChat: {
         position: 'absolute',
-        bottom: 100,
-        right: 24,
-        width: 60,
-        height: 60,
-        borderRadius: 30,
+        bottom: 170,
+        right: 20,
+        width: 48,
+        height: 48,
+        borderRadius: 24,
         backgroundColor: Colors.primary,
         justifyContent: 'center',
         alignItems: 'center',
         shadowColor: Colors.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.4,
-        shadowRadius: 8,
-        elevation: 8,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.3,
+        shadowRadius: 5,
+        elevation: 5,
+    },
+    fab: {
+        position: 'absolute',
+        bottom: 100,
+        right: 20,
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: Colors.primary,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: Colors.primary,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.3,
+        shadowRadius: 5,
+        elevation: 5,
     },
 });
