@@ -61,46 +61,10 @@ export default function TabLayout() {
           }}
         />
       </Tabs>
-
-      {/* AI Chat FAB */}
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => router.push('/chat')}
-        activeOpacity={0.8}
-      >
-        <LinearGradient
-          colors={[Colors.primary, '#2A3B30']}
-          style={styles.fabGradient}
-        >
-          <Ionicons name="chatbubble-ellipses" size={24} color="#000" />
-        </LinearGradient>
-      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  fab: {
-    position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 100 : 80,
-    right: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.30,
-    shadowRadius: 4.65,
-    elevation: 8,
-  },
-  fabGradient: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  // Remove the fab styles since we're not using global FAB anymore
 });

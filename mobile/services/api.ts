@@ -262,8 +262,9 @@ class ApiService {
     return this.client.get('/coaching/gemini-weekly');
   }
 
+  // Get spending analysis by period
   async getSpendingAnalysis(days: number = 30): Promise<ApiResponse<any>> {
-    return this.client.get('/coaching/spending-analysis', { params: { days } });
+    return this.client.get(`/coaching/spending-analysis?days=${days}`);
   }
 
   async getGoalAdvice(goalId: string): Promise<ApiResponse<any>> {
