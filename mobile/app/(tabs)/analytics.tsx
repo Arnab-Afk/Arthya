@@ -1,22 +1,103 @@
-import React from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { Colors } from '@/constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { Svg, Circle, G } from 'react-native-svg';
 import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
+import api from '@/services/api';
+import { SpendingAnalytics, CategoryBreakdown, Transaction } from '@/types/api';
 
 export default function AnalyticsScreen() {
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [analytics, setAnalytics] = useState<SpendingAnalytics | null>(null);
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
+
+    useEffect(() => {
+        loadData();
+    }, []);
+
+    const loadData = async () => {
+        try {
+            const [analyticsRes, transactionsRes] = await Promise.all([
+                api.getSpendingAnalytics(),
+                api.getTransactions({ limit: 5 })
+            ]);
+            
+            if (analyticsRes.success && analyticsRes.data) {
+                setAnalytics(analyticsRes.data);
+            }
+            if (transactionsRes.success && transactionsRes.data) {
+                setTransactions(transactionsRes.data.transactions || []);
+            }
+        } catch (error) {
+            console.error('Failed to load analytics:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const onRefresh = async () => {
+        setRefreshing(true);
+        await loadData();
+        setRefreshing(false);
+    };
+
+    const formatCurrency = (amount: number) => {
+        return `$${Math.abs(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    };
+
+    const getCategoryIcon = (category: string): keyof typeof Ionicons.glyphMap => {
+        const icons: Record<string, keyof typeof Ionicons.glyphMap> = {
+            'food': 'restaurant-outline',
+            'food_dining': 'restaurant-outline',
+            'shopping': 'cart-outline',
+            'transport': 'car-outline',
+            'transportation': 'car-outline',
+            'entertainment': 'game-controller-outline',
+            'utilities': 'flash-outline',
+            'healthcare': 'medkit-outline',
+            'health': 'medkit-outline',
+            'income': 'wallet-outline',
+            'other': 'ellipsis-horizontal-outline',
+        };
+        return icons[category.toLowerCase()] || 'ellipsis-horizontal-outline';
+    };
+
+    const getCategoryColor = (index: number): string => {
+        const colors = ['#9FE8AE', '#D4B483', '#64D2FF', '#FF9500', '#FF453A', '#BF5AF2'];
+        return colors[index % colors.length];
+    };
+
+    if (loading) {
+        return (
+            <View style={[styles.container, styles.centerContent]}>
+                <ActivityIndicator size="large" color={Colors.primary} />
+                <Text style={styles.loadingText}>Loading analytics...</Text>
+            </View>
+        );
+    }
+
+    const topCategories = analytics?.categoryBreakdown?.slice(0, 3) || [];
+    const totalSpending = analytics?.totalExpense || 0;
+    const savingsRate = totalSpending > 0 && analytics?.totalIncome 
+        ? Math.round(((analytics.totalIncome - totalSpending) / analytics.totalIncome) * 100)
+        : 0;
+
     return (
         <View style={styles.container}>
             <Animated.View entering={FadeInDown.delay(100).duration(500)} style={styles.header}>
-                <TouchableOpacity>
-                    <Ionicons name="arrow-back" size={24} color={Colors.text} />
-                </TouchableOpacity>
+                <View style={{ width: 24 }} />
                 <Text style={styles.headerTitle}>Analytics</Text>
                 <View style={{ width: 24 }} />
             </Animated.View>
 
-            <ScrollView contentContainerStyle={styles.content}>
+            <ScrollView 
+                contentContainerStyle={styles.content}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
+                }
+            >
                 {/* Donut Chart */}
                 <Animated.View entering={ZoomIn.delay(300).duration(600)} style={styles.chartContainer}>
                     <Svg height="280" width="280" viewBox="0 0 280 280">
@@ -30,7 +111,7 @@ export default function AnalyticsScreen() {
                                 strokeWidth="50"
                                 fill="transparent"
                             />
-                            {/* Progress Circle (88%) - Green */}
+                            {/* Progress Circle - Savings Rate */}
                             <Circle
                                 cx="140"
                                 cy="140"
@@ -39,74 +120,91 @@ export default function AnalyticsScreen() {
                                 strokeWidth="50"
                                 fill="transparent"
                                 strokeDasharray="565"
-                                strokeDashoffset="68" // 565 * (1 - 0.88)
+                                strokeDashoffset={565 * (1 - Math.max(0, savingsRate) / 100)}
                                 strokeLinecap="butt"
-                            />
-                            {/* Segment 2 (10%) - Blue - Outer Ring */}
-                            <Circle
-                                cx="140"
-                                cy="140"
-                                r="125" // Outer ring
-                                stroke="#D0E8F2"
-                                strokeWidth="12"
-                                fill="transparent"
-                                strokeDasharray="785"
-                                strokeDashoffset="706" // 10%
-                                rotation="320"
-                                origin="140, 140"
-                                strokeLinecap="round"
                             />
                         </G>
                         {/* Center Text */}
                         <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' }}>
-                            <Text style={styles.percentageText}>%88</Text>
-                            <Text style={styles.balanceText}>Balanc Your Expenses</Text>
+                            <Text style={styles.percentageText}>{savingsRate}%</Text>
+                            <Text style={styles.balanceText}>Savings Rate</Text>
                         </View>
                     </Svg>
+                </Animated.View>
 
-                    {/* Floating Labels */}
-                    <View style={{ position: 'absolute', top: 110, left: 0, backgroundColor: '#D0E8F2', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 }}>
-                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#000' }}>%10</Text>
+                {/* Summary Cards */}
+                <Animated.View entering={FadeInDown.delay(400).duration(500)} style={styles.summaryRow}>
+                    <View style={styles.summaryCard}>
+                        <Text style={styles.summaryLabel}>Income</Text>
+                        <Text style={[styles.summaryValue, { color: '#9FE8AE' }]}>
+                            {formatCurrency(analytics?.totalIncome || 0)}
+                        </Text>
                     </View>
-                    <View style={{ position: 'absolute', top: 150, right: 0, backgroundColor: '#F8C8DC', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 }}>
-                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#000' }}>%50</Text>
-                    </View>
-                    <View style={{ position: 'absolute', bottom: 40, left: 60, backgroundColor: '#D4B483', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 }}>
-                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#000' }}>%35</Text>
+                    <View style={styles.summaryCard}>
+                        <Text style={styles.summaryLabel}>Expenses</Text>
+                        <Text style={[styles.summaryValue, { color: '#FF453A' }]}>
+                            {formatCurrency(analytics?.totalExpense || 0)}
+                        </Text>
                     </View>
                 </Animated.View>
 
+                {/* Top Categories */}
                 <Animated.View entering={FadeInDown.delay(500).duration(500)} style={styles.statsRow}>
-                    <View style={styles.statCard}>
-                        <Ionicons name="cart-outline" size={24} color={Colors.text} />
-                        <Text style={styles.statLabel}>Products</Text>
-                        <Text style={styles.statValue}>%50</Text>
-                    </View>
-                    <View style={styles.statCard}>
-                        <Ionicons name="restaurant-outline" size={24} color={Colors.text} />
-                        <Text style={styles.statLabel}>Restorans</Text>
-                        <Text style={styles.statValue}>%35</Text>
-                    </View>
-                    <View style={styles.statCard}>
-                        <Ionicons name="medkit-outline" size={24} color={Colors.text} />
-                        <Text style={styles.statLabel}>Medicine</Text>
-                        <Text style={styles.statValue}>%15</Text>
-                    </View>
+                    {topCategories.length > 0 ? (
+                        topCategories.map((cat, index) => (
+                            <View key={cat.category} style={styles.statCard}>
+                                <Ionicons name={getCategoryIcon(cat.category)} size={24} color={getCategoryColor(index)} />
+                                <Text style={styles.statLabel}>{cat.category}</Text>
+                                <Text style={styles.statValue}>{cat.percentage?.toFixed(0) || 0}%</Text>
+                            </View>
+                        ))
+                    ) : (
+                        <View style={styles.emptyState}>
+                            <Text style={styles.emptyText}>No spending data yet</Text>
+                        </View>
+                    )}
                 </Animated.View>
 
+                {/* Recent Transactions */}
                 <Animated.View entering={FadeInDown.delay(600).duration(500)}>
-                    <Text style={styles.sectionTitle}>Transaction</Text>
-                    {/* Transaction List Items */}
-                    <View style={styles.transactionItem}>
-                        <View style={styles.transactionIcon}>
-                            <Ionicons name="musical-notes" size={20} color="#fff" />
+                    <Text style={styles.sectionTitle}>Recent Transactions</Text>
+                    {transactions.length > 0 ? (
+                        transactions.map((transaction) => (
+                            <View key={transaction.id || transaction._id} style={styles.transactionItem}>
+                                <View style={[
+                                    styles.transactionIcon,
+                                    { backgroundColor: transaction.type === 'income' ? '#9FE8AE22' : '#FF453A22' }
+                                ]}>
+                                    <Ionicons 
+                                        name={transaction.type === 'income' ? 'arrow-down' : 'arrow-up'} 
+                                        size={20} 
+                                        color={transaction.type === 'income' ? '#9FE8AE' : '#FF453A'} 
+                                    />
+                                </View>
+                                <View style={styles.transactionDetails}>
+                                    <Text style={styles.transactionName}>{transaction.category}</Text>
+                                    <Text style={styles.transactionDate}>
+                                        {new Date(transaction.date).toLocaleDateString('en-US', {
+                                            day: 'numeric',
+                                            month: 'short',
+                                            year: 'numeric'
+                                        })}
+                                    </Text>
+                                </View>
+                                <Text style={[
+                                    styles.transactionAmount,
+                                    { color: transaction.type === 'income' ? '#9FE8AE' : '#FF453A' }
+                                ]}>
+                                    {transaction.type === 'income' ? '+' : '-'} {formatCurrency(transaction.amount)}
+                                </Text>
+                            </View>
+                        ))
+                    ) : (
+                        <View style={styles.emptyState}>
+                            <Ionicons name="receipt-outline" size={48} color={Colors.textDim} />
+                            <Text style={styles.emptyText}>No transactions yet</Text>
                         </View>
-                        <View style={styles.transactionDetails}>
-                            <Text style={styles.transactionName}>Apple music</Text>
-                            <Text style={styles.transactionDate}>19 October 2024, 09:15</Text>
-                        </View>
-                        <Text style={styles.transactionAmount}>- $5.00</Text>
-                    </View>
+                    )}
                 </Animated.View>
             </ScrollView>
         </View>
@@ -118,6 +216,15 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: Colors.background,
         paddingTop: 60,
+    },
+    centerContent: {
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    loadingText: {
+        color: Colors.textDim,
+        marginTop: 16,
+        fontSize: 14,
     },
     header: {
         flexDirection: 'row',
@@ -133,10 +240,11 @@ const styles = StyleSheet.create({
     },
     content: {
         paddingHorizontal: 24,
+        paddingBottom: 100,
     },
     chartContainer: {
         alignItems: 'center',
-        marginBottom: 40,
+        marginBottom: 24,
         marginTop: 20,
     },
     percentageText: {
@@ -151,10 +259,34 @@ const styles = StyleSheet.create({
         fontSize: 14,
         marginTop: 8,
     },
+    summaryRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 24,
+        gap: 16,
+    },
+    summaryCard: {
+        flex: 1,
+        backgroundColor: Colors.card,
+        padding: 16,
+        borderRadius: 16,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: Colors.border,
+    },
+    summaryLabel: {
+        color: Colors.textDim,
+        fontSize: 14,
+        marginBottom: 8,
+    },
+    summaryValue: {
+        fontSize: 20,
+        fontWeight: 'bold',
+    },
     statsRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        marginBottom: 40,
+        marginBottom: 32,
     },
     statCard: {
         backgroundColor: Colors.card,
@@ -174,8 +306,9 @@ const styles = StyleSheet.create({
     },
     statLabel: {
         color: Colors.textDim,
-        marginTop: 12,
-        fontSize: 12,
+        marginTop: 8,
+        fontSize: 11,
+        textTransform: 'capitalize',
     },
     statValue: {
         color: Colors.text,
@@ -192,18 +325,20 @@ const styles = StyleSheet.create({
     transactionItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 24,
+        marginBottom: 16,
+        backgroundColor: Colors.card,
+        padding: 16,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: Colors.border,
     },
     transactionIcon: {
         width: 48,
         height: 48,
         borderRadius: 24,
-        backgroundColor: Colors.cardElevated,
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 16,
-        borderWidth: 1,
-        borderColor: Colors.border,
     },
     transactionDetails: {
         flex: 1,
@@ -212,6 +347,7 @@ const styles = StyleSheet.create({
         color: Colors.text,
         fontWeight: '500',
         fontSize: 16,
+        textTransform: 'capitalize',
     },
     transactionDate: {
         color: Colors.textDim,
@@ -219,8 +355,18 @@ const styles = StyleSheet.create({
         marginTop: 4,
     },
     transactionAmount: {
-        color: Colors.danger,
         fontWeight: '600',
         fontSize: 16,
+    },
+    emptyState: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 40,
+    },
+    emptyText: {
+        color: Colors.textDim,
+        fontSize: 14,
+        marginTop: 12,
     },
 });

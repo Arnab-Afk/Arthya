@@ -15,6 +15,28 @@ import {
   CoachingAdviceResponse,
   CreateTransactionRequest,
   CreateGoalRequest,
+  Budget,
+  BudgetSummary,
+  CreateBudgetRequest,
+  AchievementsResponse,
+  AchievementProgress,
+  IncomePrediction,
+  ExpensePrediction,
+  CashFlowProjection,
+  Nudge,
+  FinancialHealthScore,
+  SpendingByCategoryResponse,
+  MonthlyTrend,
+  IncomeAnalysis,
+  AIInsightsResponse,
+  FinancialProfile,
+  WeeklySummary,
+  ActionPlan,
+  ChatResponse,
+  BulkImportTransaction,
+  BulkImportResponse,
+  Notification,
+  CreateNotificationRequest,
 } from '@/types/api';
 
 // Change this to your computer's IP address when testing on physical device
@@ -23,7 +45,7 @@ import {
 
 const getApiUrl = () => {
   if (!__DEV__) {
-    return 'https://your-production-api.com/api';
+    return 'https://arthyapi.ishikabhoyar.tech/api';
   }
   
   // For Android emulator, use 10.0.2.2
@@ -31,10 +53,10 @@ const getApiUrl = () => {
   // For iOS simulator, localhost works
   if (Platform.OS === 'android') {
     // Use your local IP for physical device, or 10.0.2.2 for emulator
-    return 'http://192.168.44.122:3000/api';
+    return 'https://arthyapi.ishikabhoyar.tech/api';
   }
   
-  return 'http://localhost:3000/api';
+  return 'https://arthyapi.ishikabhoyar.tech/api';
 };
 
 const API_URL = getApiUrl();
@@ -45,7 +67,7 @@ class ApiService {
   constructor() {
     this.client = axios.create({
       baseURL: API_URL,
-      timeout: 10000,
+      timeout: 30000, // 30 seconds for deployed server
       headers: {
         'Content-Type': 'application/json',
       },
@@ -187,7 +209,7 @@ class ApiService {
     return this.client.get('/analytics/trends', { params: { period } });
   }
 
-  async getIncomeAnalysis(): Promise<ApiResponse<any>> {
+  async getIncomeAnalysis(): Promise<ApiResponse<IncomeAnalysis>> {
     return this.client.get('/analytics/income');
   }
 
@@ -196,28 +218,39 @@ class ApiService {
     return this.client.post('/coaching/advice');
   }
 
-  async getSpendingInsights(period: number = 30): Promise<ApiResponse<any>> {
+  async getSpendingInsights(period: number = 30): Promise<ApiResponse<{
+    totalSpent: number;
+    averageTransaction: number;
+    mostExpensiveDay: string;
+    mostExpensiveCategory: string;
+    unusualSpending: any[];
+  }>> {
     return this.client.get('/coaching/insights', { params: { period } });
   }
 
-  async getAIInsights(): Promise<ApiResponse<any>> {
+  async getAIInsights(): Promise<ApiResponse<AIInsightsResponse>> {
     return this.client.get('/coaching/ai-insights');
   }
 
-  async getFinancialProfile(): Promise<ApiResponse<any>> {
+  async getFinancialProfile(): Promise<ApiResponse<FinancialProfile>> {
     return this.client.get('/coaching/profile');
   }
 
-  async getWeeklySummary(): Promise<ApiResponse<any>> {
+  async getWeeklySummary(): Promise<ApiResponse<WeeklySummary>> {
     return this.client.get('/coaching/weekly-summary');
   }
 
-  async getActionPlan(): Promise<ApiResponse<any>> {
+  async getActionPlan(): Promise<ApiResponse<ActionPlan>> {
     return this.client.get('/coaching/action-plan');
   }
 
-  async chatWithCoach(message: string, history?: { role: 'user' | 'model'; content: string }[]): Promise<ApiResponse<any>> {
+  async chatWithCoach(message: string, history?: { role: 'user' | 'model'; content: string }[]): Promise<ApiResponse<ChatResponse>> {
     return this.client.post('/coaching/chat', { message, history });
+  }
+
+  // Smart Notification
+  async createNotification(data: CreateNotificationRequest): Promise<ApiResponse<Notification>> {
+    return this.client.post('/coaching/notify', data);
   }
 
   // Gemini AI-powered endpoints
@@ -238,26 +271,19 @@ class ApiService {
   }
 
   // Budget Methods
-  async getBudgets(isActive?: boolean): Promise<ApiResponse<any[]>> {
+  async getBudgets(isActive?: boolean): Promise<ApiResponse<Budget[]>> {
     return this.client.get('/budgets', { params: { isActive } });
   }
 
-  async getBudget(id: string): Promise<ApiResponse<any>> {
+  async getBudget(id: string): Promise<ApiResponse<Budget>> {
     return this.client.get(`/budgets/${id}`);
   }
 
-  async createBudget(data: {
-    category: string;
-    amount: number;
-    period?: 'weekly' | 'monthly' | 'yearly';
-    startDate?: string;
-    alertThreshold?: number;
-    notes?: string;
-  }): Promise<ApiResponse<any>> {
+  async createBudget(data: CreateBudgetRequest): Promise<ApiResponse<Budget>> {
     return this.client.post('/budgets', data);
   }
 
-  async updateBudget(id: string, data: Partial<any>): Promise<ApiResponse<any>> {
+  async updateBudget(id: string, data: Partial<CreateBudgetRequest>): Promise<ApiResponse<Budget>> {
     return this.client.put(`/budgets/${id}`, data);
   }
 
@@ -265,67 +291,61 @@ class ApiService {
     return this.client.delete(`/budgets/${id}`);
   }
 
-  async getBudgetSummary(): Promise<ApiResponse<any>> {
+  async getBudgetSummary(): Promise<ApiResponse<BudgetSummary>> {
     return this.client.get('/budgets/summary');
   }
 
   // Achievement Methods
-  async getAchievements(): Promise<ApiResponse<any>> {
+  async getAchievements(): Promise<ApiResponse<AchievementsResponse>> {
     return this.client.get('/achievements');
   }
 
-  async checkAchievements(): Promise<ApiResponse<any>> {
+  async checkAchievements(): Promise<ApiResponse<{
+    newlyUnlocked: { id: number; type: string; title: string; description: string; icon: string; unlockedAt: string }[];
+    message: string;
+  }>> {
     return this.client.post('/achievements/check');
   }
 
-  async getAchievementProgress(): Promise<ApiResponse<any>> {
+  async getAchievementProgress(): Promise<ApiResponse<AchievementProgress>> {
     return this.client.get('/achievements/progress');
   }
 
+  async getAchievementLeaderboard(): Promise<ApiResponse<{ userId: number; achievementCount: number }[]>> {
+    return this.client.get('/achievements/leaderboard');
+  }
+
   // Prediction Methods
-  async getIncomePrediction(months?: number): Promise<ApiResponse<any>> {
+  async getIncomePrediction(months?: number): Promise<ApiResponse<IncomePrediction>> {
     return this.client.get('/predictions/income', { params: { months } });
   }
 
-  async getExpensePrediction(months?: number): Promise<ApiResponse<any>> {
+  async getExpensePrediction(months?: number): Promise<ApiResponse<ExpensePrediction>> {
     return this.client.get('/predictions/expenses', { params: { months } });
   }
 
-  async getCashFlowProjection(months?: number): Promise<ApiResponse<any>> {
+  async getCashFlowProjection(months?: number): Promise<ApiResponse<CashFlowProjection>> {
     return this.client.get('/predictions/cashflow', { params: { months } });
   }
 
-  async getNudges(): Promise<ApiResponse<any[]>> {
+  async getNudges(): Promise<ApiResponse<Nudge[]>> {
     return this.client.get('/predictions/nudges');
   }
 
-  async getFinancialHealthScore(): Promise<ApiResponse<any>> {
+  async getFinancialHealthScore(): Promise<ApiResponse<FinancialHealthScore>> {
     return this.client.get('/predictions/health-score');
   }
 
   // SMS Import Methods
-  async bulkImportTransactions(transactions: {
-    type: 'income' | 'expense';
-    amount: number;
-    description: string;
-    category?: string;
-    date: string;
-    source?: string;
-    notes?: string;
-  }[]): Promise<ApiResponse<{
-    imported: number;
-    skipped: number;
-    errors: string[];
-    message: string;
-  }>> {
+  async bulkImportTransactions(transactions: BulkImportTransaction[]): Promise<ApiResponse<BulkImportResponse>> {
     return this.client.post('/transactions/bulk-import', { transactions });
   }
 
-  async getSpendingByCategory(startDate?: string, endDate?: string): Promise<ApiResponse<any>> {
+  async getSpendingByCategory(startDate?: string, endDate?: string): Promise<ApiResponse<SpendingByCategoryResponse>> {
     return this.client.get('/transactions/by-category', { params: { startDate, endDate } });
   }
 
-  async getMonthlyTrends(months?: number): Promise<ApiResponse<any>> {
+  async getMonthlyTrends(months?: number): Promise<ApiResponse<MonthlyTrend[]>> {
     return this.client.get('/transactions/monthly-trends', { params: { months } });
   }
 
