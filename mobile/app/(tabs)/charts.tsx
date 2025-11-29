@@ -1,18 +1,19 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { Colors } from '@/constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { Svg, Rect, Defs, LinearGradient as SvgLinearGradient, Stop, Text as SvgText, Circle, Line } from 'react-native-svg';
 import { Dimensions } from 'react-native';
 import Animated, { FadeInDown, FadeInUp, FadeIn } from 'react-native-reanimated';
+import api from '@/services/api';
+import { CategorySpending } from '@/types/api';
 
 const { width } = Dimensions.get('window');
 
 type TimePeriod = 'weekly' | 'monthly' | 'annually';
-type Category = 'Food' | 'Shopping' | 'Transport' | 'Bills' | 'Entertainment';
 
 interface CategoryData {
-    name: Category;
+    name: string;
     amount: number;
     percentage: number;
     color: string;
@@ -20,39 +21,101 @@ interface CategoryData {
     trend: number;
 }
 
-const chartData: Record<TimePeriod, CategoryData[]> = {
-    weekly: [
-        { name: 'Food', amount: 320, percentage: 35, color: '#9FE8AE', icon: 'restaurant', trend: -5 },
-        { name: 'Shopping', amount: 280, percentage: 30, color: '#D4B483', icon: 'cart', trend: 12 },
-        { name: 'Transport', amount: 150, percentage: 16, color: '#FF9500', icon: 'car', trend: -3 },
-        { name: 'Bills', amount: 100, percentage: 11, color: '#64D2FF', icon: 'receipt', trend: 0 },
-        { name: 'Entertainment', amount: 75, percentage: 8, color: '#FF453A', icon: 'game-controller', trend: 8 },
-    ],
-    monthly: [
-        { name: 'Food', amount: 1450, percentage: 32, color: '#9FE8AE', icon: 'restaurant', trend: -8 },
-        { name: 'Shopping', amount: 1280, percentage: 28, color: '#D4B483', icon: 'cart', trend: 15 },
-        { name: 'Transport', amount: 780, percentage: 17, color: '#FF9500', icon: 'car', trend: -2 },
-        { name: 'Bills', amount: 650, percentage: 14, color: '#64D2FF', icon: 'receipt', trend: 0 },
-        { name: 'Entertainment', amount: 390, percentage: 9, color: '#FF453A', icon: 'game-controller', trend: 5 },
-    ],
-    annually: [
-        { name: 'Food', amount: 16800, percentage: 30, color: '#9FE8AE', icon: 'restaurant', trend: -10 },
-        { name: 'Shopping', amount: 15600, percentage: 28, color: '#D4B483', icon: 'cart', trend: 18 },
-        { name: 'Transport', amount: 10400, percentage: 19, color: '#FF9500', icon: 'car', trend: -5 },
-        { name: 'Bills', amount: 7800, percentage: 14, color: '#64D2FF', icon: 'receipt', trend: 2 },
-        { name: 'Entertainment', amount: 5200, percentage: 9, color: '#FF453A', icon: 'game-controller', trend: 12 },
-    ],
+const categoryColors = ['#9FE8AE', '#D4B483', '#FF9500', '#64D2FF', '#FF453A', '#BF5AF2'];
+
+const getCategoryIcon = (category: string): keyof typeof Ionicons.glyphMap => {
+    const icons: Record<string, keyof typeof Ionicons.glyphMap> = {
+        'food': 'restaurant',
+        'food_dining': 'restaurant',
+        'shopping': 'cart',
+        'transport': 'car',
+        'transportation': 'car',
+        'entertainment': 'game-controller',
+        'utilities': 'flash',
+        'healthcare': 'medkit',
+        'health': 'medkit',
+        'bills': 'receipt',
+        'income': 'wallet',
+        'other': 'ellipsis-horizontal',
+    };
+    return icons[category.toLowerCase()] || 'ellipsis-horizontal';
 };
 
 export default function ChartsScreen() {
     const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('monthly');
     const [selectedCategory, setSelectedCategory] = useState<number>(0);
-    const data = chartData[selectedPeriod];
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [spending, setSpending] = useState(0);
+    const [income, setIncome] = useState(0);
+    const [data, setData] = useState<CategoryData[]>([]);
 
-    const maxAmount = Math.max(...data.map(d => d.amount));
+    useEffect(() => {
+        loadData();
+    }, [selectedPeriod]);
+
+    const loadData = async () => {
+        try {
+            // Get days based on period
+            const days = selectedPeriod === 'weekly' ? 7 : selectedPeriod === 'monthly' ? 30 : 365;
+            const response = await api.getSpendingAnalysis(days);
+            
+            if (response.success && response.data) {
+                const analyticsData = response.data;
+                setSpending(analyticsData.totalSpending || 0);
+                setIncome(analyticsData.totalIncome || 0);
+                
+                // Transform category breakdown into chart data
+                const categories = analyticsData.categories || analyticsData.categoryBreakdown || [];
+                const categoryData: CategoryData[] = categories.map((cat: CategorySpending, index: number) => ({
+                    name: cat.category.charAt(0).toUpperCase() + cat.category.slice(1).replace('_', ' '),
+                    amount: cat.total || 0,
+                    percentage: parseFloat(cat.percentage) || 0,
+                    color: categoryColors[index % categoryColors.length],
+                    icon: getCategoryIcon(cat.category),
+                    trend: 0,
+                }));
+                
+                setData(categoryData.length > 0 ? categoryData : getEmptyData());
+            } else {
+                setData(getEmptyData());
+            }
+        } catch (error) {
+            console.error('Failed to load chart data:', error);
+            setData(getEmptyData());
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const getEmptyData = (): CategoryData[] => [
+        { name: 'No Data', amount: 0, percentage: 100, color: Colors.textDim, icon: 'help-circle', trend: 0 }
+    ];
+
+    const onRefresh = async () => {
+        setRefreshing(true);
+        await loadData();
+        setRefreshing(false);
+    };
+
+    const formatCurrency = (amount: number) => {
+        return `$${amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+    };
+
+    if (loading) {
+        return (
+            <View style={[styles.container, styles.centerContent]}>
+                <ActivityIndicator size="large" color={Colors.primary} />
+                <Text style={styles.loadingText}>Loading charts...</Text>
+            </View>
+        );
+    }
+
+    const maxAmount = Math.max(...data.map(d => d.amount), 1);
     const chartHeight = 280;
-    const barWidth = 56;
+    const barWidth = Math.min(56, (width - 80) / Math.max(data.length, 1) - 10);
     const barSpacing = ((width - 48) - (barWidth * data.length)) / (data.length + 1);
+    const displaySpending = spending || data.reduce((sum, d) => sum + d.amount, 0);
 
     return (
         <View style={styles.container}>
@@ -61,8 +124,8 @@ export default function ChartsScreen() {
                     <Ionicons name="stats-chart" size={28} color={Colors.primary} />
                     <Text style={styles.headerTitle}>Spending Analysis</Text>
                 </View>
-                <TouchableOpacity style={styles.filterButton}>
-                    <Ionicons name="filter" size={20} color={Colors.text} />
+                <TouchableOpacity style={styles.filterButton} onPress={onRefresh}>
+                    <Ionicons name="refresh" size={20} color={Colors.text} />
                 </TouchableOpacity>
             </Animated.View>
 
@@ -87,174 +150,181 @@ export default function ChartsScreen() {
                 </TouchableOpacity>
             </Animated.View>
 
-            <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+            <ScrollView 
+                contentContainerStyle={styles.content} 
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
+                }
+            >
                 {/* Total Spending Card */}
                 <Animated.View entering={FadeInUp.delay(300).duration(600)} style={styles.totalCard}>
                     <View style={styles.totalCardHeader}>
                         <View>
                             <Text style={styles.totalLabel}>Total Spending</Text>
-                            <Text style={styles.totalAmount}>${data.reduce((sum, d) => sum + d.amount, 0).toLocaleString()}</Text>
+                            <Text style={styles.totalAmount}>{formatCurrency(displaySpending)}</Text>
                         </View>
-                        <View style={styles.trendBadge}>
-                            <Ionicons name="trending-down" size={16} color={Colors.success} />
-                            <Text style={styles.trendText}>-5.2%</Text>
-                        </View>
+                        {income > 0 && (
+                            <View style={styles.trendBadge}>
+                                <Ionicons 
+                                    name={displaySpending < income ? "trending-down" : "trending-up"} 
+                                    size={16} 
+                                    color={displaySpending < income ? Colors.success : Colors.danger} 
+                                />
+                                <Text style={[
+                                    styles.trendText,
+                                    { color: displaySpending < income ? Colors.success : Colors.danger }
+                                ]}>
+                                    {((displaySpending / income) * 100).toFixed(0)}% of income
+                                </Text>
+                            </View>
+                        )}
                     </View>
-                    <Text style={styles.comparisonText}>vs last {selectedPeriod === 'weekly' ? 'week' : selectedPeriod === 'monthly' ? 'month' : 'year'}</Text>
+                    <Text style={styles.comparisonText}>
+                        {selectedPeriod === 'weekly' ? 'This week' : selectedPeriod === 'monthly' ? 'This month' : 'This year'}
+                    </Text>
                 </Animated.View>
 
                 {/* Interactive Chart */}
-                <Animated.View entering={FadeInUp.delay(500).duration(800)} style={styles.chartContainer}>
-                    <Svg height={chartHeight + 60} width={width - 48}>
-                        <Defs>
-                            {data.map((category, index) => (
-                                <SvgLinearGradient key={index} id={`grad${index}`} x1="0" y1="0" x2="0" y2="1">
-                                    <Stop offset="0" stopColor={category.color} stopOpacity="1" />
-                                    <Stop offset="1" stopColor={category.color} stopOpacity="0.3" />
-                                </SvgLinearGradient>
-                            ))}
-                        </Defs>
+                {data.length > 0 && data[0].amount > 0 ? (
+                    <Animated.View entering={FadeInUp.delay(500).duration(800)} style={styles.chartContainer}>
+                        <Svg height={chartHeight + 60} width={width - 48}>
+                            <Defs>
+                                {data.map((category, index) => (
+                                    <SvgLinearGradient key={index} id={`grad${index}`} x1="0" y1="0" x2="0" y2="1">
+                                        <Stop offset="0" stopColor={category.color} stopOpacity="1" />
+                                        <Stop offset="1" stopColor={category.color} stopOpacity="0.3" />
+                                    </SvgLinearGradient>
+                                ))}
+                            </Defs>
 
-                        {/* Grid lines */}
-                        {[0, 25, 50, 75, 100].map((percent, i) => {
-                            const y = chartHeight - (chartHeight * percent / 100);
-                            return (
-                                <Line
-                                    key={i}
-                                    x1="0"
-                                    y1={y}
-                                    x2={width - 48}
-                                    y2={y}
-                                    stroke={Colors.border}
-                                    strokeWidth="1"
-                                    strokeDasharray="4,4"
-                                />
-                            );
-                        })}
-
-                        {/* Bars */}
-                        {data.map((category, index) => {
-                            const barHeight = (category.amount / maxAmount) * (chartHeight - 40);
-                            const x = barSpacing + (index * (barWidth + barSpacing));
-                            const y = chartHeight - barHeight;
-                            const isSelected = index === selectedCategory;
-
-                            return (
-                                <React.Fragment key={index}>
-                                    {/* Background bar */}
-                                    <Rect
-                                        x={x}
-                                        y={20}
-                                        width={barWidth}
-                                        height={chartHeight - 20}
-                                        rx="28"
-                                        fill={Colors.card}
+                            {/* Grid lines */}
+                            {[0, 25, 50, 75, 100].map((percent, i) => {
+                                const y = chartHeight - (chartHeight * percent / 100);
+                                return (
+                                    <Line
+                                        key={i}
+                                        x1="0"
+                                        y1={y}
+                                        x2={width - 48}
+                                        y2={y}
+                                        stroke={Colors.border}
+                                        strokeWidth="1"
+                                        strokeDasharray="4,4"
                                     />
-                                    {/* Value bar */}
-                                    <Rect
-                                        x={x}
-                                        y={y}
-                                        width={barWidth}
-                                        height={barHeight}
-                                        rx="28"
-                                        fill={`url(#grad${index})`}
-                                        onPress={() => setSelectedCategory(index)}
-                                    />
-                                    {/* Selection indicator */}
-                                    {isSelected && (
-                                        <>
+                                );
+                            })}
+
+                            {/* Bars */}
+                            {data.map((category, index) => {
+                                const barHeight = Math.max((category.amount / maxAmount) * (chartHeight - 40), 10);
+                                const x = barSpacing + (index * (barWidth + barSpacing));
+                                const y = chartHeight - barHeight;
+                                const isSelected = index === selectedCategory;
+
+                                return (
+                                    <React.Fragment key={index}>
+                                        {/* Background bar */}
+                                        <Rect
+                                            x={x}
+                                            y={20}
+                                            width={barWidth}
+                                            height={chartHeight - 20}
+                                            rx={barWidth / 2}
+                                            fill={Colors.card}
+                                        />
+                                        {/* Value bar */}
+                                        <Rect
+                                            x={x}
+                                            y={y}
+                                            width={barWidth}
+                                            height={barHeight}
+                                            rx={barWidth / 2}
+                                            fill={`url(#grad${index})`}
+                                            onPress={() => setSelectedCategory(index)}
+                                        />
+                                        {/* Selection indicator */}
+                                        {isSelected && (
                                             <Circle
                                                 cx={x + barWidth / 2}
-                                                cy={y + barHeight / 2}
-                                                r="30"
-                                                stroke={category.color}
-                                                strokeWidth="2"
-                                                strokeDasharray="5 5"
-                                                fill="none"
-                                            />
-                                            <Circle
-                                                cx={x + barWidth / 2}
-                                                cy={y + barHeight / 2}
-                                                r="8"
+                                                cy={y - 10}
+                                                r="6"
                                                 fill={category.color}
                                             />
-                                        </>
-                                    )}
-                                    {/* Labels */}
-                                    <SvgText
-                                        x={x + barWidth / 2}
-                                        y={chartHeight + 25}
-                                        fill={isSelected ? Colors.text : Colors.textDim}
-                                        fontSize="12"
-                                        fontWeight={isSelected ? '600' : '400'}
-                                        textAnchor="middle"
-                                    >
-                                        {category.name}
-                                    </SvgText>
-                                </React.Fragment>
-                            );
-                        })}
-                    </Svg>
-                </Animated.View>
+                                        )}
+                                        {/* Labels */}
+                                        <SvgText
+                                            x={x + barWidth / 2}
+                                            y={chartHeight + 25}
+                                            fill={isSelected ? Colors.text : Colors.textDim}
+                                            fontSize="10"
+                                            fontWeight={isSelected ? '600' : '400'}
+                                            textAnchor="middle"
+                                        >
+                                            {category.name.length > 8 ? category.name.substring(0, 6) + '..' : category.name}
+                                        </SvgText>
+                                    </React.Fragment>
+                                );
+                            })}
+                        </Svg>
+                    </Animated.View>
+                ) : (
+                    <Animated.View entering={FadeInUp.delay(500).duration(800)} style={styles.emptyChart}>
+                        <Ionicons name="bar-chart-outline" size={64} color={Colors.textDim} />
+                        <Text style={styles.emptyText}>No spending data for this period</Text>
+                        <Text style={styles.emptySubtext}>Start adding transactions to see your charts</Text>
+                    </Animated.View>
+                )}
 
                 {/* Selected Category Details */}
-                <Animated.View key={selectedCategory} entering={FadeIn.duration(400)} style={styles.detailsCard}>
-                    <View style={styles.detailsHeader}>
-                        <View style={[styles.categoryIcon, { backgroundColor: data[selectedCategory].color + '20' }]}>
-                            <Ionicons name={data[selectedCategory].icon} size={24} color={data[selectedCategory].color} />
+                {data.length > 0 && data[0].amount > 0 && (
+                    <Animated.View key={selectedCategory} entering={FadeIn.duration(400)} style={styles.detailsCard}>
+                        <View style={styles.detailsHeader}>
+                            <View style={[styles.categoryIcon, { backgroundColor: data[selectedCategory].color + '20' }]}>
+                                <Ionicons name={data[selectedCategory].icon} size={24} color={data[selectedCategory].color} />
+                            </View>
+                            <View style={styles.detailsInfo}>
+                                <Text style={styles.categoryName}>{data[selectedCategory].name}</Text>
+                                <Text style={styles.categoryAmount}>{formatCurrency(data[selectedCategory].amount)}</Text>
+                            </View>
+                            <View style={styles.percentageContainer}>
+                                <Text style={styles.percentageValue}>{data[selectedCategory].percentage.toFixed(0)}%</Text>
+                                <Text style={styles.percentageLabel}>of total</Text>
+                            </View>
                         </View>
-                        <View style={styles.detailsInfo}>
-                            <Text style={styles.categoryName}>{data[selectedCategory].name}</Text>
-                            <Text style={styles.categoryAmount}>${data[selectedCategory].amount.toLocaleString()}</Text>
-                        </View>
-                        <View style={styles.percentageContainer}>
-                            <Text style={styles.percentageValue}>{data[selectedCategory].percentage}%</Text>
-                            <Text style={styles.percentageLabel}>of total</Text>
-                        </View>
-                    </View>
-                    <View style={styles.trendContainer}>
-                        <Ionicons 
-                            name={data[selectedCategory].trend > 0 ? "trending-up" : data[selectedCategory].trend < 0 ? "trending-down" : "remove"} 
-                            size={16} 
-                            color={data[selectedCategory].trend > 0 ? Colors.danger : data[selectedCategory].trend < 0 ? Colors.success : Colors.textDim} 
-                        />
-                        <Text style={[
-                            styles.trendValue,
-                            { color: data[selectedCategory].trend > 0 ? Colors.danger : data[selectedCategory].trend < 0 ? Colors.success : Colors.textDim }
-                        ]}>
-                            {data[selectedCategory].trend > 0 ? '+' : ''}{data[selectedCategory].trend}% from last period
-                        </Text>
-                    </View>
-                </Animated.View>
+                    </Animated.View>
+                )}
 
                 {/* Category Breakdown */}
-                <Animated.View entering={FadeInUp.delay(700).duration(600)} style={styles.breakdownSection}>
-                    <Text style={styles.sectionTitle}>Category Breakdown</Text>
-                    {data.map((category, index) => (
-                        <TouchableOpacity
-                            key={index}
-                            style={styles.breakdownItem}
-                            onPress={() => setSelectedCategory(index)}
-                        >
-                            <View style={styles.breakdownLeft}>
-                                <View style={[styles.colorIndicator, { backgroundColor: category.color }]} />
-                                <Ionicons name={category.icon} size={20} color={Colors.text} style={{ marginRight: 12 }} />
-                                <Text style={styles.breakdownName}>{category.name}</Text>
-                            </View>
-                            <View style={styles.breakdownRight}>
-                                <Text style={styles.breakdownAmount}>${category.amount.toLocaleString()}</Text>
-                                <View style={styles.breakdownBar}>
-                                    <View 
-                                        style={[
-                                            styles.breakdownBarFill, 
-                                            { width: `${category.percentage}%`, backgroundColor: category.color }
-                                        ]} 
-                                    />
+                {data.length > 0 && data[0].amount > 0 && (
+                    <Animated.View entering={FadeInUp.delay(700).duration(600)} style={styles.breakdownSection}>
+                        <Text style={styles.sectionTitle}>Category Breakdown</Text>
+                        {data.map((category, index) => (
+                            <TouchableOpacity
+                                key={index}
+                                style={styles.breakdownItem}
+                                onPress={() => setSelectedCategory(index)}
+                            >
+                                <View style={styles.breakdownLeft}>
+                                    <View style={[styles.colorIndicator, { backgroundColor: category.color }]} />
+                                    <Ionicons name={category.icon} size={20} color={Colors.text} style={{ marginRight: 12 }} />
+                                    <Text style={styles.breakdownName}>{category.name}</Text>
                                 </View>
-                            </View>
-                        </TouchableOpacity>
-                    ))}
-                </Animated.View>
+                                <View style={styles.breakdownRight}>
+                                    <Text style={styles.breakdownAmount}>{formatCurrency(category.amount)}</Text>
+                                    <View style={styles.breakdownBar}>
+                                        <View 
+                                            style={[
+                                                styles.breakdownBarFill, 
+                                                { width: `${category.percentage}%`, backgroundColor: category.color }
+                                            ]} 
+                                        />
+                                    </View>
+                                </View>
+                            </TouchableOpacity>
+                        ))}
+                    </Animated.View>
+                )}
             </ScrollView>
         </View>
     );
@@ -265,6 +335,15 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: Colors.background,
         paddingTop: 60,
+    },
+    centerContent: {
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    loadingText: {
+        color: Colors.textDim,
+        marginTop: 16,
+        fontSize: 14,
     },
     header: {
         flexDirection: 'row',
@@ -329,7 +408,7 @@ const styles = StyleSheet.create({
     },
     content: {
         paddingHorizontal: 24,
-        paddingBottom: 40,
+        paddingBottom: 100,
     },
     totalCard: {
         backgroundColor: Colors.card,
@@ -370,8 +449,7 @@ const styles = StyleSheet.create({
         gap: 4,
     },
     trendText: {
-        color: Colors.success,
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: '600',
     },
     comparisonText: {
@@ -391,6 +469,28 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
         elevation: 4,
     },
+    emptyChart: {
+        backgroundColor: Colors.card,
+        borderRadius: 24,
+        padding: 40,
+        marginBottom: 24,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    emptyText: {
+        color: Colors.text,
+        fontSize: 16,
+        fontWeight: '600',
+        marginTop: 16,
+    },
+    emptySubtext: {
+        color: Colors.textDim,
+        fontSize: 14,
+        marginTop: 8,
+        textAlign: 'center',
+    },
     detailsCard: {
         backgroundColor: Colors.card,
         borderRadius: 24,
@@ -407,7 +507,6 @@ const styles = StyleSheet.create({
     detailsHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 16,
     },
     categoryIcon: {
         width: 48,
@@ -442,18 +541,6 @@ const styles = StyleSheet.create({
     percentageLabel: {
         fontSize: 11,
         color: Colors.textDim,
-    },
-    trendContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        paddingTop: 12,
-        borderTopWidth: 1,
-        borderTopColor: Colors.border,
-    },
-    trendValue: {
-        fontSize: 13,
-        fontWeight: '500',
     },
     breakdownSection: {
         marginBottom: 24,

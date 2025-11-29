@@ -1,22 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, ScrollView, Image, TouchableOpacity, Dimensions, Platform, RefreshControl, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Dimensions, Platform, RefreshControl, ActivityIndicator } from 'react-native';
 import { Colors } from '@/constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SummaryCard } from '@/components/SummaryCard';
 import { GoalCard } from '@/components/GoalCard';
-import Animated, { FadeInDown, FadeInRight, ZoomIn } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
 import { useAuth } from '@/contexts/AuthContext';
 import api from '@/services/api';
-import { DashboardData } from '@/types/api';
+import { DashboardData, Transaction, Goal } from '@/types/api';
 import { useRouter } from 'expo-router';
 
 const { width } = Dimensions.get('window');
 
 export default function HomeScreen() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -26,9 +27,16 @@ export default function HomeScreen() {
 
   const loadDashboard = async () => {
     try {
-      const response = await api.getDashboard();
-      if (response.success && response.data) {
-        setDashboard(response.data);
+      const [dashboardRes, goalsRes] = await Promise.all([
+        api.getDashboard(),
+        api.getGoals()
+      ]);
+      
+      if (dashboardRes.success && dashboardRes.data) {
+        setDashboard(dashboardRes.data);
+      }
+      if (goalsRes.success && goalsRes.data) {
+        setGoals(goalsRes.data.filter((g: Goal) => g.status === 'active'));
       }
     } catch (error) {
       console.error('Failed to load dashboard:', error);
@@ -43,11 +51,6 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
-  const handleLogout = async () => {
-    await logout();
-    router.replace('/login');
-  };
-
   if (loading) {
     return (
       <View style={[styles.container, styles.centerContent]}>
@@ -57,8 +60,9 @@ export default function HomeScreen() {
     );
   }
 
-  const formatCurrency = (amount: number) => {
-    return `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const formatCurrency = (amount: number | string) => {
+    const num = typeof amount === 'string' ? parseFloat(amount) : amount;
+    return `$${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const getInitials = (name?: string) => {
@@ -66,22 +70,24 @@ export default function HomeScreen() {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
   };
 
+  const income = dashboard?.summary?.totalIncome || 0;
+  const expense = dashboard?.summary?.totalExpense || 0;
+  const balance = dashboard?.summary?.balance || (income - expense);
+  const savingsRate = dashboard?.summary?.savingsRate || 0;
+
   return (
     <View style={styles.container}>
       {/* Header */}
       <Animated.View entering={FadeInDown.delay(100).duration(500)} style={styles.header}>
-        <TouchableOpacity>
-          <Ionicons name="menu" size={24} color={Colors.text} />
+        <TouchableOpacity onPress={() => router.push('/chat')}>
+          <Ionicons name="chatbubble-ellipses-outline" size={24} color={Colors.text} />
         </TouchableOpacity>
         <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.iconButton}>
-            <Ionicons name="search" size={24} color={Colors.text} />
-          </TouchableOpacity>
           <TouchableOpacity style={styles.iconButton}>
             <Ionicons name="notifications-outline" size={24} color={Colors.text} />
             <View style={styles.badge} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.profileButton} onPress={handleLogout}>
+          <TouchableOpacity style={styles.profileButton} onPress={() => router.push('/(tabs)/explore')}>
             <Text style={styles.profileText}>{getInitials(user?.name)}</Text>
           </TouchableOpacity>
         </View>
@@ -93,105 +99,51 @@ export default function HomeScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
         }
       >
-        {/* Cards Section */}
-        <Animated.ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.cardsScroll}
-          entering={FadeInRight.delay(200).duration(500)}
-        >
-          {dashboard?.cards && dashboard.cards.length > 0 ? (
-            dashboard.cards.map((card, index) => (
-              <LinearGradient
-                key={card._id}
-                colors={index === 0 ? ['#333', '#111'] : ['#222', '#000']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[styles.card, index > 0 && { marginLeft: 15, opacity: 0.6 }]}
-              >
-                <View style={styles.cardHeader}>
-                  <Ionicons 
-                    name={card.cardType === 'paypal' ? 'logo-paypal' : 'card'} 
-                    size={24} 
-                    color="#fff" 
-                  />
-                  <Ionicons name="wifi" size={24} color="#666" />
-                </View>
-                <Text style={styles.cardNumber}>{card.cardNumber}</Text>
-                <View style={styles.cardFooter}>
-                  <Text style={styles.cardLabel}>Balance: {formatCurrency(card.balance)}</Text>
-                </View>
-              </LinearGradient>
-            ))
-          ) : (
-            <LinearGradient
-              colors={['#333', '#111']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.card}
-            >
-              <View style={styles.cardHeader}>
-                <Ionicons name="card" size={24} color="#fff" />
-                <Ionicons name="wifi" size={24} color="#666" />
-              </View>
-              <Text style={styles.cardNumber}>No cards added</Text>
-              <View style={styles.cardFooter}>
-                <Text style={styles.cardLabel}>Add a card to get started</Text>
-              </View>
-            </LinearGradient>
-          )}
-        </Animated.ScrollView>
+        {/* Balance Card */}
+        <Animated.View entering={FadeInRight.delay(200).duration(500)}>
+          <LinearGradient
+            colors={['#333', '#111']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.card}
+          >
+            <View style={styles.cardHeader}>
+              <Ionicons name="wallet" size={24} color={Colors.primary} />
+              <Text style={styles.cardTitle}>Total Balance</Text>
+            </View>
+            <Text style={styles.balanceAmount}>{formatCurrency(balance)}</Text>
+            <View style={styles.cardFooter}>
+              <Text style={styles.cardLabel}>
+                Savings Rate: {savingsRate.toFixed(1)}%
+              </Text>
+            </View>
+          </LinearGradient>
+        </Animated.View>
 
         {/* Summary Cards */}
         <Animated.View entering={FadeInDown.delay(300).duration(500)} style={styles.summarySection}>
           <SummaryCard 
             title="Income" 
-            amount={formatCurrency(dashboard?.summary.income || 0)} 
+            amount={formatCurrency(income)} 
             icon="arrow-down" 
             color="#9FE8AE" 
-            trend="+12%" 
           />
           <SummaryCard 
             title="Expense" 
-            amount={formatCurrency(dashboard?.summary.expense || 0)} 
+            amount={formatCurrency(expense)} 
             icon="arrow-up" 
             color="#FF453A" 
-            trend="-5%" 
           />
           <SummaryCard 
             title="Savings" 
-            amount={formatCurrency(dashboard?.summary.savings || 0)} 
+            amount={formatCurrency(income - expense)} 
             icon="wallet" 
             color="#D4B483" 
-            trend="+8%" 
           />
         </Animated.View>
 
-        {/* Available Amount */}
-        <Animated.View entering={FadeInDown.delay(400).duration(500)} style={styles.balanceSection}>
-          <Text style={styles.balanceLabel}>Available Amount</Text>
-          <Text style={styles.balanceValue}>{formatCurrency(dashboard?.summary.availableBalance || 0)}</Text>
-
-          <View style={styles.balanceRow}>
-            <View style={styles.balanceItem}>
-              <View style={[styles.indicator, { borderColor: Colors.primary }]} />
-              <View>
-                <Text style={styles.itemLabel}>Card balance</Text>
-                <Text style={styles.itemValue}>{formatCurrency(dashboard?.summary.availableBalance || 0)}</Text>
-              </View>
-            </View>
-            <View style={styles.balanceItem}>
-              <View style={[styles.indicator, { borderColor: Colors.accent }]} />
-              <View>
-                <Text style={styles.itemLabel}>Credit limit</Text>
-                <Text style={styles.itemValue}>{formatCurrency(dashboard?.summary.creditLimit || 0)}</Text>
-              </View>
-            </View>
-          </View>
-        </Animated.View>
-
         {/* Goals & Milestones */}
-        <Animated.View entering={FadeInDown.delay(500).duration(500)} style={styles.goalsSection}>
+        <Animated.View entering={FadeInDown.delay(400).duration(500)} style={styles.goalsSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Goals & Milestones</Text>
             <TouchableOpacity>
@@ -199,15 +151,15 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.goalsScroll}>
-            {dashboard?.activeGoals && dashboard.activeGoals.length > 0 ? (
-              dashboard.activeGoals.slice(0, 3).map((goal) => (
+            {goals.length > 0 ? (
+              goals.slice(0, 3).map((goal: Goal) => (
                 <GoalCard
-                  key={goal._id}
-                  title={goal.title}
+                  key={goal.id}
+                  title={goal.name}
                   currentAmount={formatCurrency(goal.currentAmount)}
                   targetAmount={formatCurrency(goal.targetAmount)}
-                  progress={goal.currentAmount / goal.targetAmount}
-                  icon={goal.icon || 'star'}
+                  progress={goal.progress / 100}
+                  icon="flag"
                 />
               ))
             ) : (
@@ -221,7 +173,7 @@ export default function HomeScreen() {
         </Animated.View>
 
         {/* Quick Actions */}
-        <Animated.View entering={FadeInDown.delay(550).duration(500)} style={styles.quickActionsSection}>
+        <Animated.View entering={FadeInDown.delay(450).duration(500)} style={styles.quickActionsSection}>
           <Text style={styles.sectionTitle}>Quick Actions</Text>
           <View style={styles.quickActionsRow}>
             <TouchableOpacity 
@@ -233,11 +185,14 @@ export default function HomeScreen() {
               </View>
               <Text style={styles.quickActionText}>Import SMS</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.quickActionButton}>
+            <TouchableOpacity 
+              style={styles.quickActionButton}
+              onPress={() => router.push('/chat')}
+            >
               <View style={[styles.quickActionIcon, { backgroundColor: '#64D2FF22' }]}>
-                <Ionicons name="add-circle" size={24} color="#64D2FF" />
+                <Ionicons name="chatbubble-ellipses" size={24} color="#64D2FF" />
               </View>
-              <Text style={styles.quickActionText}>Add Transaction</Text>
+              <Text style={styles.quickActionText}>AI Coach</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.quickActionButton}>
               <View style={[styles.quickActionIcon, { backgroundColor: '#D4B48322' }]}>
@@ -249,12 +204,12 @@ export default function HomeScreen() {
         </Animated.View>
 
         {/* Recent Transactions */}
-        <Animated.View entering={FadeInDown.delay(600).duration(500)} style={styles.transferSection}>
+        <Animated.View entering={FadeInDown.delay(500).duration(500)} style={styles.transferSection}>
           <Text style={styles.sectionTitle}>Recent Transactions</Text>
           {dashboard?.recentTransactions && dashboard.recentTransactions.length > 0 ? (
             <View style={styles.transactionsList}>
-              {dashboard.recentTransactions.slice(0, 5).map((transaction) => (
-                <View key={transaction._id} style={styles.transactionItem}>
+              {dashboard.recentTransactions.slice(0, 5).map((transaction: Transaction) => (
+                <View key={transaction.id} style={styles.transactionItem}>
                   <View style={styles.transactionLeft}>
                     <View style={[
                       styles.transactionIcon,
@@ -356,21 +311,16 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   content: {
-    paddingBottom: 20,
-  },
-  cardsScroll: {
-    paddingLeft: 24,
-    marginBottom: 32,
+    paddingBottom: 100,
+    paddingHorizontal: 24,
   },
   card: {
-    width: width * 0.75,
-    height: 190,
+    width: '100%',
     borderRadius: 24,
     padding: 24,
-    justifyContent: 'space-between',
+    marginBottom: 24,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    marginRight: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.4,
@@ -379,21 +329,19 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
   },
-  payeerText: {
-    color: '#fff',
+  cardTitle: {
+    color: Colors.text,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  balanceAmount: {
+    color: Colors.primary,
+    fontSize: 36,
     fontWeight: 'bold',
-    fontSize: 20,
-    letterSpacing: 1,
-  },
-  cardNumber: {
-    color: '#E0E0E0',
-    fontSize: 20,
-    letterSpacing: 3,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    marginTop: 20,
+    marginVertical: 16,
   },
   cardFooter: {
     flexDirection: 'row',
@@ -403,54 +351,7 @@ const styles = StyleSheet.create({
     color: '#AAAAAA',
     fontSize: 12,
   },
-  balanceSection: {
-    marginBottom: 32,
-    padding: 20,
-    backgroundColor: Colors.card,
-    marginHorizontal: 24,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  balanceLabel: {
-    color: Colors.textDim,
-    fontSize: 16,
-    marginBottom: 8,
-  },
-  balanceValue: {
-    color: Colors.text,
-    fontSize: 40,
-    fontWeight: 'bold',
-    marginBottom: 24,
-  },
-  balanceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  balanceItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '48%',
-  },
-  indicator: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 4,
-    marginRight: 12,
-  },
-  itemLabel: {
-    color: Colors.textDim,
-    fontSize: 13,
-  },
-  itemValue: {
-    color: Colors.text,
-    fontWeight: '600',
-    fontSize: 16,
-    marginTop: 4,
-  },
   transferSection: {
-    paddingHorizontal: 24,
     marginBottom: 32,
   },
   sectionTitle: {
