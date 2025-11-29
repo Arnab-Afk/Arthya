@@ -5,12 +5,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { Svg, Circle, G } from 'react-native-svg';
 import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 import api from '@/services/api';
-import { SpendingAnalytics, CategoryBreakdown, Transaction } from '@/types/api';
+import { CategorySpending, Transaction } from '@/types/api';
+
+interface AnalyticsData {
+    totalIncome: number;
+    totalExpense: number;
+    categoryBreakdown: CategorySpending[];
+}
 
 export default function AnalyticsScreen() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [analytics, setAnalytics] = useState<SpendingAnalytics | null>(null);
+    const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
 
     useEffect(() => {
@@ -20,12 +26,17 @@ export default function AnalyticsScreen() {
     const loadData = async () => {
         try {
             const [analyticsRes, transactionsRes] = await Promise.all([
-                api.getSpendingAnalytics(),
+                api.getSpendingAnalysis(30),
                 api.getTransactions({ limit: 5 })
             ]);
             
             if (analyticsRes.success && analyticsRes.data) {
-                setAnalytics(analyticsRes.data);
+                const data = analyticsRes.data;
+                setAnalytics({
+                    totalIncome: data.totalIncome || 0,
+                    totalExpense: data.totalSpending || 0,
+                    categoryBreakdown: data.categories || [],
+                });
             }
             if (transactionsRes.success && transactionsRes.data) {
                 setTransactions(transactionsRes.data.transactions || []);
@@ -155,7 +166,7 @@ export default function AnalyticsScreen() {
                             <View key={cat.category} style={styles.statCard}>
                                 <Ionicons name={getCategoryIcon(cat.category)} size={24} color={getCategoryColor(index)} />
                                 <Text style={styles.statLabel}>{cat.category}</Text>
-                                <Text style={styles.statValue}>{cat.percentage?.toFixed(0) || 0}%</Text>
+                                <Text style={styles.statValue}>{parseFloat(cat.percentage)?.toFixed(0) || 0}%</Text>
                             </View>
                         ))
                     ) : (
