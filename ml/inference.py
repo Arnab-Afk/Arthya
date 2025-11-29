@@ -11,10 +11,6 @@ from sklearn.pipeline import Pipeline
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 from prophet import Prophet
-import tensorflow as tf
-from tensorflow.keras import Sequential
-from tensorflow.keras.layers import LSTM, Dense
-from tensorflow.keras.callbacks import EarlyStopping
 import joblib
 
 warnings.filterwarnings("ignore")
@@ -168,55 +164,55 @@ def train_and_infer_on_half(
 		raise ValueError("Insufficient data for sequences. Reduce seq_len or provide more data.")
 
 	print("Loading LSTM model...")
-	try:
-		lstm_model = tf.keras.models.load_model(lstm_model_path)
-		print("Loaded existing LSTM model.")
-		expected_shape = (X_seq_train.shape[1], X_seq_train.shape[2])
-		if lstm_model.input_shape[1:] != expected_shape:
-			print(f"Input shape mismatch {lstm_model.input_shape[1:]} vs {expected_shape}. Rebuilding model.")
-			lstm_model = Sequential([
-				LSTM(32, return_sequences=False, input_shape=expected_shape),
-				Dense(16, activation='relu'),
-				Dense(1),
-			])
-			lstm_model.compile(optimizer='adam', loss='mse')
-	except Exception as e:
-		print(f"Could not load LSTM model ({e}). Creating new model.")
-		lstm_model = Sequential([
-			LSTM(32, return_sequences=False, input_shape=(X_seq_train.shape[1], X_seq_train.shape[2])),
-			Dense(16, activation='relu'),
-			Dense(1),
-		])
-		lstm_model.compile(optimizer='adam', loss='mse')
+	# try:
+	# 	lstm_model = tf.keras.models.load_model(lstm_model_path)
+	# 	print("Loaded existing LSTM model.")
+	# 	expected_shape = (X_seq_train.shape[1], X_seq_train.shape[2])
+	# 	if lstm_model.input_shape[1:] != expected_shape:
+	# 		print(f"Input shape mismatch {lstm_model.input_shape[1:]} vs {expected_shape}. Rebuilding model.")
+	# 		lstm_model = Sequential([
+	# 			LSTM(32, return_sequences=False, input_shape=expected_shape),
+	# 			Dense(16, activation='relu'),
+	# 			Dense(1),
+	# 		])
+	# 		lstm_model.compile(optimizer='adam', loss='mse')
+	# except Exception as e:
+	# 	print(f"Could not load LSTM model ({e}). Creating new model.")
+	# 	lstm_model = Sequential([
+	# 		LSTM(32, return_sequences=False, input_shape=(X_seq_train.shape[1], X_seq_train.shape[2])),
+	# 		Dense(16, activation='relu'),
+	# 		Dense(1),
+	# 	])
+	# 	lstm_model.compile(optimizer='adam', loss='mse')
 
-	print("Training (fine-tuning) LSTM on training sequences...")
-	es = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
-	lstm_model.fit(
-		X_seq_train,
-		y_seq_train,
-		validation_split=0.2,
-		epochs=epochs,
-		batch_size=batch_size,
-		callbacks=[es],
-		verbose=1,
-	)
+	# print("Training (fine-tuning) LSTM on training sequences...")
+	# es = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+	# lstm_model.fit(
+	# 	X_seq_train,
+	# 	y_seq_train,
+	# 	validation_split=0.2,
+	# 	epochs=epochs,
+	# 	batch_size=batch_size,
+	# 	callbacks=[es],
+	# 	verbose=1,
+	# )
 
 	print("Predicting residuals on test sequences...")
-	pred_residuals_test = lstm_model.predict(X_seq_test, verbose=0).reshape(-1)
+	# pred_residuals_test = lstm_model.predict(X_seq_test, verbose=0).reshape(-1)
 
-	aligned_yhat_test = yhat_test[seq_len:seq_len + len(pred_residuals_test)]
-	aligned_y_test = y_test[seq_len:seq_len + len(pred_residuals_test)]
-	final_pred_test = aligned_yhat_test + pred_residuals_test
+	# aligned_yhat_test = yhat_test[seq_len:seq_len + len(pred_residuals_test)]
+	# aligned_y_test = y_test[seq_len:seq_len + len(pred_residuals_test)]
+	# final_pred_test = aligned_yhat_test + pred_residuals_test
 
-	mu, sigma = load_income_stats(stats_csv="worker_c_hybrid.csv", income_col="Income_Total")
-	prophet_income_pred = income_from_standardized(aligned_yhat_test, mu, sigma)
-	combined_income_pred = income_from_standardized(final_pred_test, mu, sigma)
+	# mu, sigma = load_income_stats(stats_csv="worker_c_hybrid.csv", income_col="Income_Total")
+	# prophet_income_pred = income_from_standardized(aligned_yhat_test, mu, sigma)
+	# combined_income_pred = income_from_standardized(final_pred_test, mu, sigma)
 	
-	mae = mean_absolute_error(aligned_y_test, final_pred_test)
-	rmse = np.sqrt(mean_squared_error(aligned_y_test, final_pred_test))
-	print(f"Test MAE: {mae:.2f}, Test RMSE: {rmse:.2f}")
+	# mae = mean_absolute_error(aligned_y_test, final_pred_test)
+	# rmse = np.sqrt(mean_squared_error(aligned_y_test, final_pred_test))
+	# print(f"Test MAE: {mae:.2f}, Test RMSE: {rmse:.2f}")
 
-	test_dates = test_df['ds'].values[seq_len:seq_len + len(pred_residuals_test)]
+	# test_dates = test_df['ds'].values[seq_len:seq_len + len(pred_residuals_test)]
 	
 	# # Save retrained models
 	# os.makedirs("models/", exist_ok=True)
@@ -229,16 +225,16 @@ def train_and_infer_on_half(
 	# print(f"Feature pipeline saved to: {pipeline_save_path}")
 
 	return {
-		'mae': mae,
-		'rmse': rmse,
-		'test_dates': test_dates,
-		'test_actual': aligned_y_test,
-		'prophet_predictions': aligned_yhat_test,
-		'combined_predictions': final_pred_test,
-		'prophet_income_pred': prophet_income_pred,   
-        'combined_income_pred': combined_income_pred, 
-        'income_mean': mu,                             
-        'income_std': sigma,
+		# 'mae': mae,
+		# 'rmse': rmse,
+		# 'test_dates': test_dates,
+		# 'test_actual': aligned_y_test,
+		# 'prophet_predictions': aligned_yhat_test,
+		# 'combined_predictions': final_pred_test,
+		# 'prophet_income_pred': prophet_income_pred,   
+        # 'combined_income_pred': combined_income_pred, 
+        # 'income_mean': mu,                             
+        # 'income_std': sigma,
 		'seq_len': seq_len,
 	}
 

@@ -1,3 +1,4 @@
+import requests
 from flask import Flask, request, jsonify
 import os
 from typing import List, Dict, Tuple
@@ -40,39 +41,66 @@ def _get_feature_pipeline() -> Tuple[object, List[str]]:
 
 
 def _json_to_features(json_records: List[Dict]) -> pd.DataFrame:
-    required_cols = [
-        'Date', 'Job_Type', 'Education_Level', 'Public_Holiday_Flag',
-        'Local_Gas_Price', 'Monthly_Unemployment_Rate', 'Hours_Worked',
-        'Platform_Count', 'Jobs_Completed', 'Daily_Expenses', 'Daily_Income'
-    ]
+        def fill_gas_price(df: pd.DataFrame) -> pd.DataFrame:
+            """
+            Fill missing or zero Local_Gas_Price values using an external API for each date.
+            This is a stub; replace the API URL and parsing logic as needed.
+            """
+            for idx, row in df.iterrows():
+                if pd.isna(row['Local_Gas_Price']) or row['Local_Gas_Price'] == 0:
+                    date_str = pd.to_datetime(row['Date']).strftime('%Y-%m-%d')
+                    # Example API call (replace with real API endpoint and key)
+                    try:
+                        url = "https://fuel.indianapi.in/historical_fuel_price"
+                        querystring = {"location":"maharashtra", "fuel_type":"petrol", "date":date_str}
+                        headers = {"X-Api-Key": os.getenv("PETROL_API", "")}
+                        response = requests.get(url, headers=headers, params=querystring)
 
-    df = pd.DataFrame(json_records)
-    missing = [c for c in required_cols if c not in df.columns]
-    if missing:
-        raise ValueError(f"Missing required columns: {missing}")
+                        if response.status_code == 200:
+                            price = response.json().get('price', 77.5)
+                        else:
+                            price = 77.5
+                    except Exception:
+                        price = 77.5
+                    df.at[idx, 'Local_Gas_Price'] = price
+            return df
 
-    # Persist raw CSV as requested
-    os.makedirs("uploads", exist_ok=True)
-    raw_csv_path = os.path.join("uploads", "input.csv")
-    df.to_csv(raw_csv_path, index=False)
+        required_cols = [
+            'Date', 'Job_Type', 'Education_Level', 'Public_Holiday_Flag',
+            'Local_Gas_Price', 'Monthly_Unemployment_Rate', 'Hours_Worked',
+            'Platform_Count', 'Jobs_Completed', 'Daily_Expenses', 'Daily_Income'
+        ]
 
-    # Harmonize columns expected by extract_features
-    df = df.sort_values('Date').reset_index(drop=True)
-    df['Income_Total'] = df['Daily_Income']
-    df['Expenses_Total'] = df['Daily_Expenses']
-    # Approximate monthly aggregates with 30-day rolling sums
-    df['Monthly_Income'] = df['Daily_Income'].rolling(window=30, min_periods=1).sum()
-    df['Monthly_Expenses'] = df['Daily_Expenses'].rolling(window=30, min_periods=1).sum()
+        df = pd.DataFrame(json_records)
+        missing = [c for c in required_cols if c not in df.columns]
+        if missing:
+            raise ValueError(f"Missing required columns: {missing}")
 
-    # Apply provided feature extraction
-    feats = extract_features(df)
-    feats = feats.rename(columns={'Date': 'ds'})
-    feats['ds'] = pd.to_datetime(feats['ds'], errors='coerce')
-    feats = feats.dropna(subset=['ds']).reset_index(drop=True)
+        # Fill Local_Gas_Price using external API if missing/zero
+        df = fill_gas_price(df)
 
-    # Save features for traceability
-    feats.to_csv(os.path.join("uploads", "features.csv"), index=False)
-    return feats
+        # Persist raw CSV as requested
+        os.makedirs("uploads", exist_ok=True)
+        raw_csv_path = os.path.join("uploads", "input.csv")
+        df.to_csv(raw_csv_path, index=False)
+
+        # Harmonize columns expected by extract_features
+        df = df.sort_values('Date').reset_index(drop=True)
+        df['Income_Total'] = df['Daily_Income']
+        df['Expenses_Total'] = df['Daily_Expenses']
+        # Approximate monthly aggregates with 30-day rolling sums
+        df['Monthly_Income'] = df['Daily_Income'].rolling(window=30, min_periods=1).sum()
+        df['Monthly_Expenses'] = df['Daily_Expenses'].rolling(window=30, min_periods=1).sum()
+
+        # Apply provided feature extraction
+        feats = extract_features(df)
+        feats = feats.rename(columns={'Date': 'ds'})
+        feats['ds'] = pd.to_datetime(feats['ds'], errors='coerce')
+        feats = feats.dropna(subset=['ds']).reset_index(drop=True)
+
+        # Save features for traceability
+        feats.to_csv(os.path.join("uploads", "features.csv"), index=False)
+        return feats
 
 
 def _train_prophet(feats: pd.DataFrame, train_frac: float = 0.9) -> None:
@@ -159,11 +187,34 @@ def train_endpoint():
 
         feats = _json_to_features(records)
         _train_prophet(feats, train_frac=0.9)
+
+        # Prepare outputs for saving
+        mu, sigma = _mu_sigma  # type: ignore
+        forecast_df = _last_forecast_df  # type: ignore
+        dates = forecast_df['ds'].dt.strftime('%Y-%m-%d').tolist()
+        yhat = forecast_df['yhat'].astype(float).tolist()
+        incomes = [float(income_from_standardized(float(v), mu, sigma)) for v in yhat]
+        trend = forecast_df['trend'].astype(float).tolist() if 'trend' in forecast_df.columns else [0.0] * len(forecast_df)
+        weekly = forecast_df['weekly'].astype(float).tolist() if 'weekly' in forecast_df.columns else [0.0] * len(forecast_df)
+        yearly = forecast_df['yearly'].astype(float).tolist() if 'yearly' in forecast_df.columns else [0.0] * len(forecast_df)
+
+        # Save to CSV
+        out_df = pd.DataFrame({
+            'date': dates,
+            'predicted_income': incomes,
+            'trend': trend,
+            'weekly': weekly,
+            'yearly': yearly,
+        })
+        os.makedirs("uploads", exist_ok=True)
+        out_df.to_csv(os.path.join("uploads", "predictions.csv"), index=False)
+
         return jsonify({
             "status": "trained",
             "rows": len(feats),
             "train_rows": int(len(feats) * 0.9),
-            "message": "Prophet model trained and 7-day forecast prepared."
+            "message": "Prophet model trained and 7-day forecast prepared.",
+            "csv_path": "uploads/predictions.csv"
         })
     except Exception as e:
         return jsonify({"Error": str(e)}), 500
@@ -172,14 +223,12 @@ def train_endpoint():
 @app.get("/predict_7_days")
 def predict_7_days():
     try:
-        _ensure_trained()
-        mu, sigma = _mu_sigma  # type: ignore
-
-        dates = _last_forecast_df['ds'].dt.strftime('%Y-%m-%d').tolist()  # type: ignore
-        yhat = _last_forecast_df['yhat'].astype(float).tolist()  # type: ignore
-
-        # income_from_standardized expects scalars; apply element-wise
-        incomes = [float(income_from_standardized(float(v), mu, sigma)) for v in yhat]
+        csv_path = os.path.join("uploads", "predictions.csv")
+        if not os.path.exists(csv_path):
+            return jsonify({"error": "No predictions available. Train first."}), 404
+        df = pd.read_csv(csv_path)
+        dates = df['date'].astype(str).tolist()
+        incomes = df['predicted_income'].astype(float).tolist()
         return jsonify({
             "dates": dates,
             "income": incomes,
@@ -191,9 +240,12 @@ def predict_7_days():
 @app.get("/growth_trend")
 def growth_trend():
     try:
-        _ensure_trained()
-        dates = _last_forecast_df['ds'].dt.strftime('%Y-%m-%d').tolist()  # type: ignore
-        trend = _last_forecast_df['trend'].astype(float).tolist()  # type: ignore
+        csv_path = os.path.join("uploads", "predictions.csv")
+        if not os.path.exists(csv_path):
+            return jsonify({"error": "No predictions available. Train first."}), 404
+        df = pd.read_csv(csv_path)
+        dates = df['date'].astype(str).tolist()
+        trend = df['trend'].astype(float).tolist() if 'trend' in df.columns else [0.0] * len(df)
         return jsonify({
             "dates": dates,
             "trend": trend,
@@ -205,9 +257,11 @@ def growth_trend():
 @app.get("/seasonality")
 def seasonality():
     try:
-        _ensure_trained()
-        df = _last_forecast_df  # type: ignore
-        dates = df['ds'].dt.strftime('%Y-%m-%d').tolist()
+        csv_path = os.path.join("uploads", "predictions.csv")
+        if not os.path.exists(csv_path):
+            return jsonify({"error": "No predictions available. Train first."}), 404
+        df = pd.read_csv(csv_path)
+        dates = df['date'].astype(str).tolist()
         weekly = df['weekly'].astype(float).tolist() if 'weekly' in df.columns else [0.0] * len(df)
         yearly = df['yearly'].astype(float).tolist() if 'yearly' in df.columns else [0.0] * len(df)
         return jsonify({
