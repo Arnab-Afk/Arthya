@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Svg, Rect, Defs, LinearGradient as SvgLinearGradient, Stop, Text as SvgText, Circle, Line } from 'react-native-svg';
 import { Dimensions } from 'react-native';
 import Animated, { FadeInDown, FadeInUp, FadeIn } from 'react-native-reanimated';
+import { useRouter } from 'expo-router';
 import api from '@/services/api';
 import { CategorySpending } from '@/types/api';
 
@@ -42,6 +43,7 @@ const getCategoryIcon = (category: string): keyof typeof Ionicons.glyphMap => {
 };
 
 export default function ChartsScreen() {
+    const router = useRouter();
     const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('monthly');
     const [selectedCategory, setSelectedCategory] = useState<number>(0);
     const [loading, setLoading] = useState(true);
@@ -99,7 +101,7 @@ export default function ChartsScreen() {
     };
 
     const formatCurrency = (amount: number) => {
-        return `$${amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+        return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
     };
 
     if (loading) {
@@ -124,9 +126,14 @@ export default function ChartsScreen() {
                     <Ionicons name="stats-chart" size={28} color={Colors.primary} />
                     <Text style={styles.headerTitle}>Spending Analysis</Text>
                 </View>
-                <TouchableOpacity style={styles.filterButton} onPress={onRefresh}>
-                    <Ionicons name="refresh" size={20} color={Colors.text} />
-                </TouchableOpacity>
+                <View style={styles.headerRight}>
+                    <TouchableOpacity style={styles.filterButton} onPress={onRefresh}>
+                        <Ionicons name="refresh" size={20} color={Colors.text} />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.profileButton} onPress={() => router.push('/explore')}>
+                        <Ionicons name="person-circle-outline" size={28} color={Colors.text} />
+                    </TouchableOpacity>
+                </View>
             </Animated.View>
 
             <Animated.View entering={FadeInDown.delay(200).duration(500)} style={styles.tabsContainer}>
@@ -357,6 +364,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 12,
     },
+    headerRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
     headerTitle: {
         fontSize: 20,
         fontWeight: '600',
@@ -371,6 +383,9 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         borderWidth: 1,
         borderColor: Colors.border,
+    },
+    profileButton: {
+        padding: 4,
     },
     tabsContainer: {
         flexDirection: 'row',

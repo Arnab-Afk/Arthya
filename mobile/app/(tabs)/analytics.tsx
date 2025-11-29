@@ -4,6 +4,7 @@ import { Colors } from '@/constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { Svg, Circle, G } from 'react-native-svg';
 import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
+import { useRouter } from 'expo-router';
 import api from '@/services/api';
 import { CategorySpending, Transaction } from '@/types/api';
 
@@ -14,6 +15,7 @@ interface AnalyticsData {
 }
 
 export default function AnalyticsScreen() {
+    const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
@@ -55,7 +57,7 @@ export default function AnalyticsScreen() {
     };
 
     const formatCurrency = (amount: number) => {
-        return `$${Math.abs(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        return `₹${Math.abs(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     };
 
     const getCategoryIcon = (category: string): keyof typeof Ionicons.glyphMap => {
@@ -100,7 +102,9 @@ export default function AnalyticsScreen() {
             <Animated.View entering={FadeInDown.delay(100).duration(500)} style={styles.header}>
                 <View style={{ width: 24 }} />
                 <Text style={styles.headerTitle}>Analytics</Text>
-                <View style={{ width: 24 }} />
+                <TouchableOpacity onPress={() => router.push('/explore')}>
+                    <Ionicons name="person-circle-outline" size={28} color={Colors.text} />
+                </TouchableOpacity>
             </Animated.View>
 
             <ScrollView 
