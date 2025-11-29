@@ -78,6 +78,13 @@ export default function HomeScreen() {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
   };
 
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good Morning';
+    if (hour < 18) return 'Good Afternoon';
+    return 'Good Evening';
+  };
+
   // Backend returns 'income' and 'expense', not 'totalIncome' and 'totalExpense'
   const income = dashboard?.summary?.totalIncome || dashboard?.summary?.income || 0;
   const expense = dashboard?.summary?.totalExpense || dashboard?.summary?.expense || 0;
@@ -88,10 +95,14 @@ export default function HomeScreen() {
     <View style={styles.container}>
       {/* Header */}
       <Animated.View entering={FadeInDown.delay(100).duration(500)} style={styles.header}>
-        <TouchableOpacity onPress={() => router.push('/chat')}>
-          <Ionicons name="chatbubble-ellipses-outline" size={24} color={Colors.text} />
-        </TouchableOpacity>
+        <View>
+          <Text style={styles.greetingText}>{getGreeting()},</Text>
+          <Text style={styles.userNameText}>{user?.name?.split(' ')[0] || 'User'}</Text>
+        </View>
         <View style={styles.headerRight}>
+          <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/chat')}>
+            <Ionicons name="chatbubble-ellipses-outline" size={24} color={Colors.text} />
+          </TouchableOpacity>
           <TouchableOpacity style={styles.iconButton}>
             <Ionicons name="notifications-outline" size={24} color={Colors.text} />
             <View style={styles.badge} />
@@ -107,6 +118,7 @@ export default function HomeScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
         }
+        showsVerticalScrollIndicator={false}
       >
         {/* Balance Card */}
         <Animated.View entering={FadeInRight.delay(200).duration(500)}>
@@ -117,14 +129,19 @@ export default function HomeScreen() {
             style={styles.card}
           >
             <View style={styles.cardHeader}>
-              <Ionicons name="wallet" size={24} color={Colors.primary} />
+              <View style={styles.walletIconContainer}>
+                <Ionicons name="wallet" size={20} color="#fff" />
+              </View>
               <Text style={styles.cardTitle}>Total Balance</Text>
             </View>
             <Text style={styles.balanceAmount}>{formatCurrency(balance)}</Text>
             <View style={styles.cardFooter}>
-              <Text style={styles.cardLabel}>
-                Savings Rate: {savingsRate.toFixed(1)}%
-              </Text>
+              <View style={styles.savingsBadge}>
+                <Ionicons name="trending-up" size={14} color={Colors.primary} />
+                <Text style={styles.savingsText}>
+                  {savingsRate.toFixed(1)}% Savings Rate
+                </Text>
+              </View>
             </View>
           </LinearGradient>
         </Animated.View>
@@ -151,8 +168,50 @@ export default function HomeScreen() {
           />
         </Animated.View>
 
+        {/* Quick Actions */}
+        <Animated.View entering={FadeInDown.delay(400).duration(500)} style={styles.quickActionsSection}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <View style={styles.quickActionsRow}>
+            <TouchableOpacity 
+              style={styles.quickActionButton} 
+              onPress={() => router.push('/sms-import')}
+            >
+              <LinearGradient
+                colors={['rgba(159, 232, 174, 0.1)', 'rgba(159, 232, 174, 0.05)']}
+                style={styles.quickActionGradient}
+              >
+                <Ionicons name="mail" size={24} color="#9FE8AE" />
+              </LinearGradient>
+              <Text style={styles.quickActionText}>Import SMS</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.quickActionButton}
+              onPress={() => router.push('/chat')}
+            >
+              <LinearGradient
+                colors={['rgba(100, 210, 255, 0.1)', 'rgba(100, 210, 255, 0.05)']}
+                style={styles.quickActionGradient}
+              >
+                <Ionicons name="chatbubble-ellipses" size={24} color="#64D2FF" />
+              </LinearGradient>
+              <Text style={styles.quickActionText}>AI Coach</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.quickActionButton}>
+              <LinearGradient
+                colors={['rgba(212, 180, 131, 0.1)', 'rgba(212, 180, 131, 0.05)']}
+                style={styles.quickActionGradient}
+              >
+                <Ionicons name="flag" size={24} color="#D4B483" />
+              </LinearGradient>
+              <Text style={styles.quickActionText}>New Goal</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+
         {/* Goals & Milestones */}
-        <Animated.View entering={FadeInDown.delay(400).duration(500)} style={styles.goalsSection}>
+        <Animated.View entering={FadeInDown.delay(450).duration(500)} style={styles.goalsSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Goals & Milestones</Text>
             <TouchableOpacity>
@@ -181,37 +240,6 @@ export default function HomeScreen() {
           </ScrollView>
         </Animated.View>
 
-        {/* Quick Actions */}
-        <Animated.View entering={FadeInDown.delay(450).duration(500)} style={styles.quickActionsSection}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.quickActionsRow}>
-            <TouchableOpacity 
-              style={styles.quickActionButton} 
-              onPress={() => router.push('/sms-import')}
-            >
-              <View style={[styles.quickActionIcon, { backgroundColor: '#9FE8AE22' }]}>
-                <Ionicons name="mail" size={24} color="#9FE8AE" />
-              </View>
-              <Text style={styles.quickActionText}>Import SMS</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.quickActionButton}
-              onPress={() => router.push('/chat')}
-            >
-              <View style={[styles.quickActionIcon, { backgroundColor: '#64D2FF22' }]}>
-                <Ionicons name="chatbubble-ellipses" size={24} color="#64D2FF" />
-              </View>
-              <Text style={styles.quickActionText}>AI Coach</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.quickActionButton}>
-              <View style={[styles.quickActionIcon, { backgroundColor: '#D4B48322' }]}>
-                <Ionicons name="flag" size={24} color="#D4B483" />
-              </View>
-              <Text style={styles.quickActionText}>New Goal</Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-
         {/* Recent Transactions */}
         <Animated.View entering={FadeInDown.delay(500).duration(500)} style={styles.transferSection}>
           <Text style={styles.sectionTitle}>Recent Transactions</Text>
@@ -222,7 +250,7 @@ export default function HomeScreen() {
                   <View style={styles.transactionLeft}>
                     <View style={[
                       styles.transactionIcon,
-                      { backgroundColor: transaction.type === 'income' ? '#9FE8AE22' : '#FF453A22' }
+                      { backgroundColor: transaction.type === 'income' ? 'rgba(159, 232, 174, 0.1)' : 'rgba(255, 69, 58, 0.1)' }
                     ]}>
                       <Ionicons 
                         name={transaction.type === 'income' ? 'arrow-down' : 'arrow-up'} 
@@ -262,7 +290,7 @@ export default function HomeScreen() {
         onPress={() => router.push('/add-transaction')}
         activeOpacity={0.8}
       >
-        <Ionicons name="add" size={28} color="#000" />
+        <Ionicons name="add" size={32} color="#000" />
       </TouchableOpacity>
     </View>
   );
@@ -290,43 +318,61 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     marginBottom: 24,
   },
+  greetingText: {
+    color: Colors.textDim,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  userNameText: {
+    color: Colors.text,
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginTop: 4,
+  },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   iconButton: {
-    marginLeft: 20,
+    marginLeft: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.card,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   badge: {
     position: 'absolute',
-    top: -2,
-    right: -2,
+    top: 8,
+    right: 8,
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: Colors.accent,
     borderWidth: 1,
-    borderColor: Colors.background,
+    borderColor: Colors.card,
   },
   profileButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.card,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 20,
-    borderWidth: 2,
-    borderColor: Colors.primary,
+    marginLeft: 16,
     shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 4,
+    shadowRadius: 8,
     elevation: 4,
   },
   profileText: {
-    color: '#fff',
+    color: '#000',
     fontWeight: 'bold',
+    fontSize: 16,
   },
   content: {
     paddingBottom: 100,
@@ -334,90 +380,64 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '100%',
-    borderRadius: 24,
+    borderRadius: 32,
     padding: 24,
     marginBottom: 24,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(255,255,255,0.05)',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
     elevation: 10,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    marginBottom: 8,
+  },
+  walletIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   cardTitle: {
-    color: Colors.text,
+    color: Colors.textDim,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   balanceAmount: {
-    color: Colors.primary,
-    fontSize: 36,
+    color: '#fff',
+    fontSize: 42,
     fontWeight: 'bold',
-    marginVertical: 16,
+    marginVertical: 12,
+    letterSpacing: -1,
   },
   cardFooter: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  cardLabel: {
-    color: '#AAAAAA',
-    fontSize: 12,
-  },
-  transferSection: {
-    marginBottom: 32,
-  },
-  sectionTitle: {
-    color: Colors.text,
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 16,
-  },
-  transferScroll: {
-    marginLeft: -8,
-  },
-  userCard: {
-    backgroundColor: Colors.card,
-    width: 80,
-    height: 120,
-    borderRadius: 40,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 8,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.12,
-    shadowRadius: 5,
-    elevation: 3,
   },
-  userImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginBottom: 12,
+  savingsBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(159, 232, 174, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 6,
   },
-  userName: {
-    color: Colors.text,
+  savingsText: {
+    color: Colors.primary,
     fontSize: 13,
-    fontWeight: '500',
-  },
-  userId: {
-    color: Colors.textDim,
-    fontSize: 11,
-    marginTop: 4,
+    fontWeight: '600',
   },
   summarySection: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 24,
     marginBottom: 32,
   },
   goalsSection: {
@@ -427,8 +447,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 24,
     marginBottom: 16,
+  },
+  sectionTitle: {
+    color: Colors.text,
+    fontSize: 20,
+    fontWeight: 'bold',
   },
   seeAllText: {
     color: Colors.primary,
@@ -436,26 +460,28 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   goalsScroll: {
-    paddingLeft: 24,
+    marginHorizontal: -24,
+    paddingHorizontal: 24,
   },
   emptyGoals: {
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 40,
-    marginHorizontal: 24,
+    padding: 32,
     backgroundColor: Colors.card,
-    borderRadius: 20,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: Colors.border,
+    width: width - 48,
   },
   emptyTransactions: {
     alignItems: 'center',
     justifyContent: 'center',
     padding: 40,
     backgroundColor: Colors.card,
-    borderRadius: 20,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: Colors.border,
+    borderStyle: 'dashed',
   },
   emptyText: {
     color: Colors.text,
@@ -468,8 +494,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 4,
   },
+  transferSection: {
+    marginBottom: 32,
+  },
   transactionsList: {
-    gap: 12,
+    gap: 16,
   },
   transactionItem: {
     flexDirection: 'row',
@@ -477,75 +506,80 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     backgroundColor: Colors.card,
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: Colors.border,
   },
   transactionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 16,
   },
   transactionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
   },
   transactionCategory: {
     color: Colors.text,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '600',
+    marginBottom: 4,
   },
   transactionDate: {
     color: Colors.textDim,
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: 13,
   },
   transactionAmount: {
     fontSize: 16,
     fontWeight: 'bold',
   },
   quickActionsSection: {
-    paddingHorizontal: 24,
-    marginBottom: 24,
+    marginBottom: 32,
   },
   quickActionsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginTop: 16,
   },
   quickActionButton: {
     alignItems: 'center',
     width: '30%',
   },
-  quickActionIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  quickActionGradient: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
   },
   quickActionText: {
-    color: Colors.textDim,
-    fontSize: 12,
+    color: Colors.text,
+    fontSize: 13,
+    fontWeight: '500',
     textAlign: 'center',
   },
   fab: {
     position: 'absolute',
     bottom: 100,
     right: 24,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.4,
-    shadowRadius: 8,
+    shadowRadius: 12,
     elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
 });
