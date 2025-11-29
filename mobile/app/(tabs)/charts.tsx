@@ -46,7 +46,7 @@ const getCategoryIcon = (category: string): keyof typeof Ionicons.glyphMap => {
 export default function ChartsScreen() {
     const router = useRouter();
     const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('monthly');
-    const [selectedCategory, setSelectedCategory] = useState<number>(0);
+    const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [spending, setSpending] = useState(0);
@@ -119,8 +119,9 @@ export default function ChartsScreen() {
 
     const maxAmount = Math.max(...data.map(d => d.amount), 1);
     const chartHeight = 280;
-    const barWidth = Math.min(56, (width - 80) / Math.max(data.length, 1) - 10);
+    const barWidth = Math.min(40, (width - 80) / Math.max(data.length, 1) - 10);
     const barSpacing = ((width - 48) - (barWidth * data.length)) / (data.length + 1);
+    const borderRadius = 8;
     const displaySpending = spending || data.reduce((sum, d) => sum + d.amount, 0);
 
     return (
@@ -199,12 +200,12 @@ export default function ChartsScreen() {
                 {/* Interactive Chart */}
                 {data.length > 0 && data[0].amount > 0 ? (
                     <Animated.View entering={FadeInUp.delay(500).duration(800)} style={styles.chartContainer}>
-                        <Svg height={chartHeight + 60} width={width - 48}>
+                        <Svg height={chartHeight + 60} width={width - 80}>
                             <Defs>
                                 {data.map((category, index) => (
                                     <SvgLinearGradient key={index} id={`grad${index}`} x1="0" y1="0" x2="0" y2="1">
                                         <Stop offset="0" stopColor={category.color} stopOpacity="1" />
-                                        <Stop offset="1" stopColor={category.color} stopOpacity="0.3" />
+                                        <Stop offset="1" stopColor={category.color} stopOpacity="0.5" />
                                     </SvgLinearGradient>
                                 ))}
                             </Defs>
@@ -217,11 +218,12 @@ export default function ChartsScreen() {
                                         key={i}
                                         x1="0"
                                         y1={y}
-                                        x2={width - 48}
+                                        x2={width - 80}
                                         y2={y}
-                                        stroke={Colors.border}
+                                        stroke={Colors.textDim}
                                         strokeWidth="1"
-                                        strokeDasharray="4,4"
+                                        strokeOpacity={0.1}
+                                        strokeDasharray="8,8"
                                     />
                                 );
                             })}
@@ -232,6 +234,7 @@ export default function ChartsScreen() {
                                 const x = barSpacing + (index * (barWidth + barSpacing));
                                 const y = chartHeight - barHeight;
                                 const isSelected = index === selectedCategory;
+                                const isFocused = selectedCategory === null || isSelected;
 
                                 return (
                                     <React.Fragment key={index}>
@@ -241,8 +244,8 @@ export default function ChartsScreen() {
                                             y={20}
                                             width={barWidth}
                                             height={chartHeight - 20}
-                                            rx={barWidth / 2}
-                                            fill={Colors.card}
+                                            rx={borderRadius}
+                                            fill="rgba(255, 255, 255, 0.03)"
                                         />
                                         {/* Value bar */}
                                         <Rect
@@ -250,27 +253,41 @@ export default function ChartsScreen() {
                                             y={y}
                                             width={barWidth}
                                             height={barHeight}
-                                            rx={barWidth / 2}
+                                            rx={borderRadius}
                                             fill={`url(#grad${index})`}
-                                            onPress={() => setSelectedCategory(index)}
+                                            opacity={isFocused ? 1 : 0.3}
                                         />
-                                        {/* Selection indicator */}
+                                        {/* Invisible touch target - full height for better clickability */}
+                                        <Rect
+                                            x={x - 5}
+                                            y={0}
+                                            width={barWidth + 10}
+                                            height={chartHeight + 40}
+                                            fill="transparent"
+                                            onPress={() => setSelectedCategory(index === selectedCategory ? null : index)}
+                                        />
+                                        {/* Info on click */}
                                         {isSelected && (
-                                            <Circle
-                                                cx={x + barWidth / 2}
-                                                cy={y - 10}
-                                                r="6"
-                                                fill={category.color}
-                                            />
+                                            <SvgText
+                                                x={x + barWidth / 2}
+                                                y={y - 12}
+                                                fill={Colors.text}
+                                                fontSize="14"
+                                                fontWeight="bold"
+                                                textAnchor="middle"
+                                            >
+                                                {formatCurrency(category.amount)}
+                                            </SvgText>
                                         )}
                                         {/* Labels */}
                                         <SvgText
                                             x={x + barWidth / 2}
                                             y={chartHeight + 25}
                                             fill={isSelected ? Colors.text : Colors.textDim}
-                                            fontSize="10"
+                                            fontSize="11"
                                             fontWeight={isSelected ? '600' : '400'}
                                             textAnchor="middle"
+                                            opacity={isFocused ? 1 : 0.5}
                                         >
                                             {category.name.length > 8 ? category.name.substring(0, 6) + '..' : category.name}
                                         </SvgText>
@@ -288,7 +305,7 @@ export default function ChartsScreen() {
                 )}
 
                 {/* Selected Category Details */}
-                {data.length > 0 && data[0].amount > 0 && (
+                {selectedCategory !== null && data.length > 0 && data[selectedCategory] ? (
                     <Animated.View key={selectedCategory} entering={FadeIn.duration(400)} style={styles.detailsCard}>
                         <View style={styles.detailsHeader}>
                             <View style={[styles.categoryIcon, { backgroundColor: data[selectedCategory].color + '20' }]}>
@@ -304,7 +321,7 @@ export default function ChartsScreen() {
                             </View>
                         </View>
                     </Animated.View>
-                )}
+                ) : null}
 
                 {/* Category Breakdown */}
                 {data.length > 0 && data[0].amount > 0 && (
