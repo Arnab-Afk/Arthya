@@ -16,7 +16,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Colors } from '@/constants/Colors';
@@ -105,158 +105,165 @@ export default function AddTransactionScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="close" size={28} color={Colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Add Transaction</Text>
-        <View style={{ width: 40 }} />
-      </View>
-
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+    <>
+      <Stack.Screen
+        options={{
+          headerShown: false, // Hide the default Expo Router header
+        }}
+      />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
       >
-        {/* Type Selector */}
-        <Animated.View entering={FadeInDown.delay(100).duration(400)} style={styles.typeSelector}>
-          <TouchableOpacity
-            style={[styles.typeButton, type === 'expense' && styles.typeButtonActiveExpense]}
-            onPress={() => {
-              setType('expense');
-              setCategory('');
-            }}
-          >
-            <Ionicons
-              name="arrow-down-circle"
-              size={24}
-              color={type === 'expense' ? '#fff' : Colors.expense}
-            />
-            <Text style={[styles.typeButtonText, type === 'expense' && styles.typeButtonTextActive]}>
-              Expense
-            </Text>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="close" size={28} color={Colors.text} />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.typeButton, type === 'income' && styles.typeButtonActiveIncome]}
-            onPress={() => {
-              setType('income');
-              setCategory('');
-            }}
-          >
-            <Ionicons
-              name="arrow-up-circle"
-              size={24}
-              color={type === 'income' ? '#fff' : Colors.income}
-            />
-            <Text style={[styles.typeButtonText, type === 'income' && styles.typeButtonTextActive]}>
-              Income
-            </Text>
-          </TouchableOpacity>
-        </Animated.View>
+          <Text style={styles.headerTitle}>Add Transaction</Text>
+          <View style={styles.backButton} />
+        </View>
 
-        {/* Amount Input */}
-        <Animated.View entering={FadeInDown.delay(200).duration(400)} style={styles.amountSection}>
-          <Text style={styles.sectionLabel}>Amount</Text>
-          <View style={styles.amountInputContainer}>
-            <Text style={styles.currencySymbol}>₹</Text>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Type Selector */}
+          <Animated.View entering={FadeInDown.delay(100).duration(400)} style={styles.typeSelector}>
+            <TouchableOpacity
+              style={[styles.typeButton, type === 'expense' && styles.typeButtonActiveExpense]}
+              onPress={() => {
+                setType('expense');
+                setCategory('');
+              }}
+            >
+              <Ionicons
+                name="arrow-down-circle"
+                size={24}
+                color={type === 'expense' ? '#fff' : Colors.expense}
+              />
+              <Text style={[styles.typeButtonText, type === 'expense' && styles.typeButtonTextActive]}>
+                Expense
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.typeButton, type === 'income' && styles.typeButtonActiveIncome]}
+              onPress={() => {
+                setType('income');
+                setCategory('');
+              }}
+            >
+              <Ionicons
+                name="arrow-up-circle"
+                size={24}
+                color={type === 'income' ? '#fff' : Colors.income}
+              />
+              <Text style={[styles.typeButtonText, type === 'income' && styles.typeButtonTextActive]}>
+                Income
+              </Text>
+            </TouchableOpacity>
+          </Animated.View>
+
+          {/* Amount Input */}
+          <Animated.View entering={FadeInDown.delay(200).duration(400)} style={styles.amountSection}>
+            <Text style={styles.sectionLabel}>Amount</Text>
+            <View style={styles.amountInputContainer}>
+              <Text style={styles.currencySymbol}>₹</Text>
+              <TextInput
+                style={styles.amountInput}
+                value={amount}
+                onChangeText={setAmount}
+                placeholder="0"
+                placeholderTextColor={Colors.textDim}
+                keyboardType="decimal-pad"
+                autoFocus
+              />
+            </View>
+          </Animated.View>
+
+          {/* Category Selection */}
+          <Animated.View entering={FadeInDown.delay(300).duration(400)} style={styles.categorySection}>
+            <Text style={styles.sectionLabel}>Category</Text>
+            <View style={styles.categoryGrid}>
+              {categories.map((cat) => (
+                <TouchableOpacity
+                  key={cat.id}
+                  style={[
+                    styles.categoryItem,
+                    category === cat.id && styles.categoryItemActive,
+                  ]}
+                  onPress={() => setCategory(cat.id)}
+                >
+                  <View
+                    style={[
+                      styles.categoryIconContainer,
+                      category === cat.id && {
+                        backgroundColor: type === 'expense' ? Colors.expense : Colors.income,
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name={cat.icon as any}
+                      size={20}
+                      color={category === cat.id ? '#fff' : Colors.text}
+                    />
+                  </View>
+                  <Text
+                    style={[
+                      styles.categoryLabel,
+                      category === cat.id && styles.categoryLabelActive,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {cat.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Animated.View>
+
+          {/* Description Input */}
+          <Animated.View entering={FadeInDown.delay(400).duration(400)} style={styles.descriptionSection}>
+            <Text style={styles.sectionLabel}>Description (Optional)</Text>
             <TextInput
-              style={styles.amountInput}
-              value={amount}
-              onChangeText={setAmount}
-              placeholder="0"
+              style={styles.descriptionInput}
+              value={description}
+              onChangeText={setDescription}
+              placeholder="Add a note..."
               placeholderTextColor={Colors.textDim}
-              keyboardType="decimal-pad"
-              autoFocus
+              multiline
+              numberOfLines={3}
+              maxLength={200}
             />
-          </View>
-        </Animated.View>
+          </Animated.View>
 
-        {/* Category Selection */}
-        <Animated.View entering={FadeInDown.delay(300).duration(400)} style={styles.categorySection}>
-          <Text style={styles.sectionLabel}>Category</Text>
-          <View style={styles.categoryGrid}>
-            {categories.map((cat) => (
-              <TouchableOpacity
-                key={cat.id}
-                style={[
-                  styles.categoryItem,
-                  category === cat.id && styles.categoryItemActive,
-                ]}
-                onPress={() => setCategory(cat.id)}
-              >
-                <View
-                  style={[
-                    styles.categoryIconContainer,
-                    category === cat.id && {
-                      backgroundColor: type === 'expense' ? Colors.expense : Colors.income,
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name={cat.icon as any}
-                    size={20}
-                    color={category === cat.id ? '#fff' : Colors.text}
-                  />
-                </View>
-                <Text
-                  style={[
-                    styles.categoryLabel,
-                    category === cat.id && styles.categoryLabelActive,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {cat.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </Animated.View>
-
-        {/* Description Input */}
-        <Animated.View entering={FadeInDown.delay(400).duration(400)} style={styles.descriptionSection}>
-          <Text style={styles.sectionLabel}>Description (Optional)</Text>
-          <TextInput
-            style={styles.descriptionInput}
-            value={description}
-            onChangeText={setDescription}
-            placeholder="Add a note..."
-            placeholderTextColor={Colors.textDim}
-            multiline
-            numberOfLines={3}
-            maxLength={200}
-          />
-        </Animated.View>
-
-        {/* Submit Button */}
-        <Animated.View entering={FadeInDown.delay(500).duration(400)} style={styles.submitSection}>
-          <TouchableOpacity
-            style={[
-              styles.submitButton,
-              type === 'expense' ? styles.submitButtonExpense : styles.submitButtonIncome,
-              isSubmitting && styles.submitButtonDisabled,
-            ]}
-            onPress={handleSubmit}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Ionicons name="checkmark-circle" size={24} color="#fff" />
-                <Text style={styles.submitButtonText}>
-                  Add {type === 'expense' ? 'Expense' : 'Income'}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </Animated.View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          {/* Submit Button */}
+          <Animated.View entering={FadeInDown.delay(500).duration(400)} style={styles.submitSection}>
+            <TouchableOpacity
+              style={[
+                styles.submitButton,
+                type === 'expense' ? styles.submitButtonExpense : styles.submitButtonIncome,
+                isSubmitting && styles.submitButtonDisabled,
+              ]}
+              onPress={handleSubmit}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={24} color="#fff" />
+                  <Text style={styles.submitButtonText}>
+                    Add {type === 'expense' ? 'Expense' : 'Income'}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </Animated.View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </>
   );
 }
 
