@@ -7,13 +7,16 @@ import numpy as np
 import pandas as pd
 import joblib
 from prophet import Prophet
+import sklearn
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OrdinalEncoder
 
 from featureExtraction import extract_features
 from inference import income_from_standardized
 
 
 app = Flask(__name__)
-
 
 # Global state to reuse between requests
 FEATURE_PIPELINE_PATH = "models/feature_pipeline.joblib"
@@ -25,50 +28,61 @@ _last_future_df: pd.DataFrame | None = None
 _last_forecast_df: pd.DataFrame | None = None
 
 
-def _get_feature_pipeline() -> Tuple[object, List[str]]:
-    global _feature_pipe, _feature_names
-    if _feature_pipe is None:
-        if not os.path.exists(FEATURE_PIPELINE_PATH):
-            raise FileNotFoundError(f"Feature pipeline not found at {FEATURE_PIPELINE_PATH}")
-        _feature_pipe = joblib.load(FEATURE_PIPELINE_PATH)
-        transformer = _feature_pipe.named_steps.get("transform")
-        if transformer is None:
-            raise ValueError("Loaded feature pipeline missing 'transform' step")
-        cat_cols = transformer.transformers_[0][2] if transformer.transformers_ else []
-        num_cols = transformer.transformers_[1][2] if len(transformer.transformers_) > 1 else []
-        _feature_names = list(cat_cols) + list(num_cols)
-    return _feature_pipe, _feature_names or []
+def _get_feature_pipeline(feats: pd.DataFrame) -> Tuple[sklearn.pipeline.Pipeline, List[str]]:
+    """
+    Build a fresh feature transformation pipeline from the provided features.
+    Categorical columns are ordinal-encoded (unknowns -> -1), numeric are passed through.
+    Returns the fitted pipeline along with the ordered feature names used.
+    """
+    feat_cols = [c for c in feats.columns if c not in ["ds", "y"]]
+    cat_cols = [c for c in feat_cols if feats[c].dtype == "object"]
+    num_cols = [c for c in feat_cols if c not in cat_cols]
 
+    transformer = ColumnTransformer([
+        ("cat", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1), cat_cols),
+        ("num", "passthrough", num_cols),
+    ])
+    feature_pipe = Pipeline([("transform", transformer)])
+    feat_names = cat_cols + num_cols
+    return feature_pipe, feat_names
 
-def _json_to_features(json_records: List[Dict]) -> pd.DataFrame:
-        def fill_gas_price(df: pd.DataFrame) -> pd.DataFrame:
-            """
-            Fill missing or zero Local_Gas_Price values using an external API for each date.
-            This is a stub; replace the API URL and parsing logic as needed.
-            """
+def fill_gas_price(df: pd.DataFrame) -> pd.DataFrame:
             for idx, row in df.iterrows():
-                if pd.isna(row['Local_Gas_Price']) or row['Local_Gas_Price'] == 0:
-                    date_str = pd.to_datetime(row['Date']).strftime('%Y-%m-%d')
-                    # Example API call (replace with real API endpoint and key)
-                    try:
-                        url = "https://fuel.indianapi.in/historical_fuel_price"
-                        querystring = {"location":"maharashtra", "fuel_type":"petrol", "date":date_str}
-                        headers = {"X-Api-Key": os.getenv("PETROL_API", "")}
-                        response = requests.get(url, headers=headers, params=querystring)
+                date_str = pd.to_datetime(row['Date']).strftime('%Y-%m-%d')
+                try:
+                    url = "https://fuel.indianapi.in/historical_fuel_price"
+                    querystring = {"location":"maharashtra", "fuel_type":"petrol", "date":date_str}
+                    headers = {"X-Api-Key": os.getenv("PETROL_API", "")}
+                    # TODO: Fix the URL below
+                    response = requests.get(' ', headers=headers, params=querystring)
 
-                        if response.status_code == 200:
-                            price = response.json().get('price', 77.5)
-                        else:
-                            price = 77.5
-                    except Exception:
+                    if response.status_code == 200:
+                        price = response.json().get('price', 77.5)
+                    else:
                         price = 77.5
-                    df.at[idx, 'Local_Gas_Price'] = price
+                except Exception:
+                    price = 77.5
+                df.at[idx, 'Local_Gas_Price'] = price
             return df
 
+def get_Monthly_Unemployment_Rate(date) -> float:
+    """
+    Dummy function to return a monthly unemployment rate based on the month.
+    Replace with actual logic or data source as needed.
+    """
+    month = int(date.split('-')[1])
+    # Example static rates for demonstration purposes
+    rates = {
+        1: 5.0, 2: 5.1, 3: 5.2, 4: 5.3,
+        5: 5.4, 6: 5.5, 7: 5.6, 8: 5.7,
+        9: 5.8, 10: 5.9, 11: 6.0, 12: 6.1
+    }
+    return rates.get(month, 5.0)
+
+def _json_to_features(json_records: List[Dict]) -> pd.DataFrame:
         required_cols = [
-            'Date', 'Job_Type', 'Education_Level', 'Public_Holiday_Flag',
-            'Local_Gas_Price', 'Monthly_Unemployment_Rate', 'Hours_Worked',
-            'Platform_Count', 'Jobs_Completed', 'Daily_Expenses', 'Daily_Income'
+            'Date', 'Category',
+            'Platform_Count', 'Daily_Expenses', 'Daily_Income'
         ]
 
         df = pd.DataFrame(json_records)
@@ -78,7 +92,7 @@ def _json_to_features(json_records: List[Dict]) -> pd.DataFrame:
 
         # Fill Local_Gas_Price using external API if missing/zero
         df = fill_gas_price(df)
-
+        df['Monthly_Unemployment_Rate'] = df['Date'].apply(get_Monthly_Unemployment_Rate)
         # Persist raw CSV as requested
         os.makedirs("uploads", exist_ok=True)
         raw_csv_path = os.path.join("uploads", "input.csv")
@@ -88,6 +102,8 @@ def _json_to_features(json_records: List[Dict]) -> pd.DataFrame:
         df = df.sort_values('Date').reset_index(drop=True)
         df['Income_Total'] = df['Daily_Income']
         df['Expenses_Total'] = df['Daily_Expenses']
+        df['Job_Categories'] = df['Category']
+        
         # Approximate monthly aggregates with 30-day rolling sums
         df['Monthly_Income'] = df['Daily_Income'].rolling(window=30, min_periods=1).sum()
         df['Monthly_Expenses'] = df['Daily_Expenses'].rolling(window=30, min_periods=1).sum()
@@ -103,8 +119,9 @@ def _json_to_features(json_records: List[Dict]) -> pd.DataFrame:
         return feats
 
 
-def _train_prophet(feats: pd.DataFrame, train_frac: float = 0.9) -> None:
+def _train_prophet(feats: pd.DataFrame, train_frac: float = 0.9) -> Dict[str, float]:
     global _prophet_model, _mu_sigma, _last_future_df, _last_forecast_df
+    global _feature_pipe, _feature_names
 
     feats = feats.sort_values('ds').reset_index(drop=True)
 
@@ -121,15 +138,13 @@ def _train_prophet(feats: pd.DataFrame, train_frac: float = 0.9) -> None:
 
     split_idx = max(1, int(len(feats) * train_frac))
     train_df = feats.iloc[:split_idx].copy()
+    val_df = feats.iloc[split_idx:].copy() if split_idx < len(feats) else None
 
-    feature_pipe, feat_names = _get_feature_pipeline()
-    # Ensure all expected feature columns exist; backfill with zeros if missing
-    for col in feat_names:
-        if col not in feats.columns:
-            feats[col] = 0
-            train_df[col] = 0
+    # Instantiate a fresh, unfitted feature pipeline from current features
+    feature_pipe, feat_names = _get_feature_pipeline(feats)
 
-    # Transform with the prefit pipeline (do not refit)
+    # Fit the pipeline on training data and transform
+    feature_pipe.fit(train_df[feat_names])
     reg_train_df = pd.DataFrame(
         feature_pipe.transform(train_df[feat_names]),
         columns=feat_names,
@@ -151,6 +166,50 @@ def _train_prophet(feats: pd.DataFrame, train_frac: float = 0.9) -> None:
     )
     m.fit(train_prophet_df)
     _prophet_model = m
+    _feature_pipe = feature_pipe
+    _feature_names = feat_names
+
+    # Calculate accuracy metrics on training data
+    train_pred = m.predict(train_prophet_df)
+    train_y_actual = train_df['y'].values
+    train_y_pred = train_pred['yhat'].values
+    
+    train_mae = float(np.mean(np.abs(train_y_actual - train_y_pred)))
+    train_rmse = float(np.sqrt(np.mean((train_y_actual - train_y_pred) ** 2)))
+    train_r2 = float(1 - np.sum((train_y_actual - train_y_pred) ** 2) / np.sum((train_y_actual - np.mean(train_y_actual)) ** 2))
+    
+    metrics = {
+        'train_mae': train_mae,
+        'train_rmse': train_rmse,
+        'train_r2': train_r2,
+    }
+
+    # Calculate validation metrics if validation set exists
+    if val_df is not None and len(val_df) > 0:
+        reg_val_df = pd.DataFrame(
+            feature_pipe.transform(val_df[feat_names]),
+            columns=feat_names,
+            index=val_df.index,
+        )
+        val_prophet_df = pd.DataFrame(
+            {
+                'ds': val_df['ds'].values,
+                **{name: reg_val_df[name].values for name in safe_regressors},
+            }
+        )
+        val_pred = m.predict(val_prophet_df)
+        val_y_actual = val_df['y'].values
+        val_y_pred = val_pred['yhat'].values
+        
+        val_mae = float(np.mean(np.abs(val_y_actual - val_y_pred)))
+        val_rmse = float(np.sqrt(np.mean((val_y_actual - val_y_pred) ** 2)))
+        val_r2 = float(1 - np.sum((val_y_actual - val_y_pred) ** 2) / np.sum((val_y_actual - np.mean(val_y_actual)) ** 2))
+        
+        metrics.update({
+            'val_mae': val_mae,
+            'val_rmse': val_rmse,
+            'val_r2': val_r2,
+        })
 
     # Prepare 7-day future with last known regressors repeated
     last_row = feats.iloc[[-1]][feat_names]
@@ -169,6 +228,8 @@ def _train_prophet(feats: pd.DataFrame, train_frac: float = 0.9) -> None:
     forecast = m.predict(safe_future)
     _last_future_df = safe_future
     _last_forecast_df = forecast
+    
+    return metrics
 
 
 def _ensure_trained():
@@ -186,7 +247,7 @@ def train_endpoint():
             return jsonify({"error": "Provide a non-empty JSON array or {'data': [...]}"}), 400
 
         feats = _json_to_features(records)
-        _train_prophet(feats, train_frac=0.9)
+        metrics = _train_prophet(feats, train_frac=0.9)
 
         # Prepare outputs for saving
         mu, sigma = _mu_sigma  # type: ignore
@@ -214,7 +275,19 @@ def train_endpoint():
             "rows": len(feats),
             "train_rows": int(len(feats) * 0.9),
             "message": "Prophet model trained and 7-day forecast prepared.",
-            "csv_path": "uploads/predictions.csv"
+            "csv_path": "uploads/predictions.csv",
+            "accuracy": {
+                "train": {
+                    "mae": round(metrics.get('train_mae', 0), 4),
+                    "rmse": round(metrics.get('train_rmse', 0), 4),
+                    "r2": round(metrics.get('train_r2', 0), 4)
+                },
+                "validation": {
+                    "mae": round(metrics.get('val_mae', 0), 4),
+                    "rmse": round(metrics.get('val_rmse', 0), 4),
+                    "r2": round(metrics.get('val_r2', 0), 4)
+                } if 'val_mae' in metrics else None
+            }
         })
     except Exception as e:
         return jsonify({"Error": str(e)}), 500
