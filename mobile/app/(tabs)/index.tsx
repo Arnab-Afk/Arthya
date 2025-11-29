@@ -290,7 +290,7 @@ export default function HomeScreen() {
         onPress={() => router.push('/add-transaction')}
         activeOpacity={0.8}
       >
-        <Ionicons name="add" size={32} color="#000" />
+        <Ionicons name="add" size={28} color="#000" />
       </TouchableOpacity>
     </View>
   );
@@ -568,18 +568,16 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 100,
     right: 24,
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 5,
   },
 });
