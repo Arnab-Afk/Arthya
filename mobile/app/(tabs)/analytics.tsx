@@ -126,36 +126,38 @@ export default function AnalyticsScreen() {
             >
                 {/* Donut Chart */}
                 <Animated.View entering={ZoomIn.delay(300).duration(600)} style={styles.chartContainer}>
-                    <Svg height="280" width="280" viewBox="0 0 280 280">
-                        <G rotation="-90" origin="140, 140">
-                            {/* Background Circle */}
-                            <Circle
-                                cx="140"
-                                cy="140"
-                                r="90"
-                                stroke="#1C1C1E"
-                                strokeWidth="50"
-                                fill="transparent"
-                            />
-                            {/* Progress Circle - Savings Rate */}
-                            <Circle
-                                cx="140"
-                                cy="140"
-                                r="90"
-                                stroke={Colors.primary}
-                                strokeWidth="50"
-                                fill="transparent"
-                                strokeDasharray="565"
-                                strokeDashoffset={565 * (1 - Math.max(0, savingsRate) / 100)}
-                                strokeLinecap="butt"
-                            />
-                        </G>
+                    <View style={{ position: 'relative', width: 280, height: 280, alignItems: 'center', justifyContent: 'center' }}>
+                        <Svg height="280" width="280" viewBox="0 0 280 280" style={{ position: 'absolute' }}>
+                            <G rotation="-90" origin="140, 140">
+                                {/* Background Circle */}
+                                <Circle
+                                    cx="140"
+                                    cy="140"
+                                    r="90"
+                                    stroke="#1C1C1E"
+                                    strokeWidth="50"
+                                    fill="transparent"
+                                />
+                                {/* Progress Circle - Savings Rate */}
+                                <Circle
+                                    cx="140"
+                                    cy="140"
+                                    r="90"
+                                    stroke={Colors.primary}
+                                    strokeWidth="50"
+                                    fill="transparent"
+                                    strokeDasharray="565"
+                                    strokeDashoffset={565 * (1 - Math.max(0, savingsRate) / 100)}
+                                    strokeLinecap="butt"
+                                />
+                            </G>
+                        </Svg>
                         {/* Center Text */}
-                        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' }}>
+                        <View style={{ alignItems: 'center', justifyContent: 'center' }}>
                             <Text style={styles.percentageText}>{savingsRate}%</Text>
                             <Text style={styles.balanceText}>Savings Rate</Text>
                         </View>
-                    </Svg>
+                    </View>
                 </Animated.View>
 
                 {/* Summary Cards */}
